@@ -3,7 +3,7 @@
 
 /* Virtual Machine
  * 
- * Kenbou uses a virtual machine very similar to many hardware architectures:
+ * Keiryaku uses a virtual machine very similar to many hardware architectures:
  * - a small set of registers
  * - a stack 
  * - an instruction pointer, stack pointer and frame pointer

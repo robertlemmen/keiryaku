@@ -6,7 +6,7 @@
 #include "heap.h"
 
 int main(int argc, char **argv) {
-    printf("-=[ kenbou ]=-\n");
+    printf("-=[ keiryaku ]=-\n");
 
     struct allocator *a = allocator_new();
 

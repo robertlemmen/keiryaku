@@ -1,6 +1,6 @@
 CFLAGS=-std=c11 -D_GNU_SOURCE -pthread -Wall -g
 CC=gcc
-TARGET=kenbou
+TARGET=keiryaku
 
 SOURCES=$(shell ls *.c)
 OBJECTS=$(subst .c,.o,$(SOURCES))
