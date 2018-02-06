@@ -21,14 +21,11 @@
  *   (cell_addr & 0x00000000000FFFFF >> 8) is the index of the cell into the block
  *   adding these two gives the address of the metadata byte
  *
- * Currently we use the lower 4 bits of that metadata byte to store the type again,
- * and the upper 4 bits are reserved for garbage collector use. This leaves quite a 
- * few bits unused, this could be improved in the future. XXX needs a way to 
- * determine size of a cell, e.g. when freeing it.
+ * XXX what to store in metadata? depends on GC design
  *
  * Note that the first 64kB of the block are not used by cells, consequently the first
  * 4096 metadata bytes are not used either, these can be used to store other 
- * information, e.g. allocator data.
+ * information, e.g. allocator data. 
  * */
 
 #define BLOCK_SIZE 0x100000

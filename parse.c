@@ -1,0 +1,280 @@
+#include "parse.h"
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <assert.h>
+#include <unistd.h>
+
+#include "types.h"
+
+struct parser {
+    struct allocator *alloc;
+    int tokenizer_state;
+    struct expr_lnk *exp_stack_top;
+};
+
+#define P_LPAREN    0
+#define P_RPAREN    1
+#define P_NUMBER    2
+#define P_DOT       3
+#define P_IDENT     4
+#define P_BOOL      5
+
+#define PP_CAR  0
+#define PP_MID  1
+#define PP_CDR  2
+#define PP_DONE 3
+
+struct expr_lnk {
+    value content;
+    struct expr_lnk *outer;
+    int implicit;
+    int parse_pos;
+};
+
+// store the passed value in the current position of the top element of 
+// the exp_stack
+void parser_store_cell(struct parser *p, value cv) {
+    struct expr_lnk *cl;
+    if (p->exp_stack_top) {
+        if (p->exp_stack_top->parse_pos == PP_CAR) {
+            set_car(p->exp_stack_top->content, cv);
+            p->exp_stack_top->parse_pos = PP_MID;
+        }
+        else if (p->exp_stack_top->parse_pos == PP_CDR) {
+            set_cdr(p->exp_stack_top->content, cv);
+            p->exp_stack_top->parse_pos = PP_DONE;
+        }
+        else if (p->exp_stack_top->parse_pos == PP_MID) {
+            // short notation, create new cell in cdr and store in car of that
+            set_cdr(p->exp_stack_top->content, make_cons(p->alloc, cv, VALUE_EMPTY_LIST));
+            cv = cdr(p->exp_stack_top->content);
+            cl = malloc(sizeof(struct expr_lnk));
+            cl->content = cv;
+            cl->outer = p->exp_stack_top;
+            cl->implicit = 1;
+            p->exp_stack_top = cl;
+            p->exp_stack_top->parse_pos = PP_MID;
+        }
+        else {
+            printf("trying to store after end of cons cell\n");
+        }
+    }
+}
+
+
+void parser_parse(struct parser *p, int tok, int num, char *str) {\
+    /* XXX copy and adapt from isis */
+    value cv = VALUE_NIL;\
+    struct expr_lnk *cl;
+    switch (tok) {
+        case P_LPAREN:
+            cv = make_cons(p->alloc, VALUE_NIL, VALUE_NIL);
+            parser_store_cell(p, cv);
+            cl = malloc(sizeof(struct expr_lnk));
+            cl->content = cv;
+            cl->implicit = 0;
+            cl->outer = p->exp_stack_top;
+            p->exp_stack_top = cl;
+            cl->parse_pos = PP_CAR;
+            break;
+        case P_RPAREN:
+            // reduce expression stack
+            cl = p->exp_stack_top;
+            if (cl) {
+                while (cl->implicit) {
+                    struct expr_lnk *tmp = cl;
+                    cl = cl->outer;
+                    free(tmp);
+                }
+                p->exp_stack_top = cl->outer;
+                cv = cl->content;
+                free(cl);
+            }
+            else {
+                printf("syntax error: ')' without open s-expression\n");
+            }
+            break;
+        case P_NUMBER:
+            cv = make_int(p->alloc, num);
+            parser_store_cell(p, cv);
+            break;
+        case P_BOOL:
+            cv = num ? VALUE_TRUE : VALUE_FALSE;
+            parser_store_cell(p, cv);
+            break;
+        case P_DOT:
+            if (p->exp_stack_top->parse_pos != PP_CDR) {
+                p->exp_stack_top->parse_pos = PP_CDR;
+            }
+            else {
+                printf("dot notation not supported here\n");
+            }
+            break;
+        case P_IDENT:
+            cv = make_symbol(p->alloc, str);
+            parser_store_cell(p, cv);
+            break;
+        default:
+            printf("?? %i\n", tok);
+    }
+
+    if (!p->exp_stack_top) {
+        // we have a fully parsed expression, evaluate
+        // XXX can't eval yet, just dump
+        dump_value(cv);
+        printf("\n");
+        
+        if (isatty(fileno(stdin))) {
+            printf("> ");
+        }
+    }
+}
+/* the tokenizer takes in input string and tokenizes it, calling parse() for
+ * each token. it is based on a simple state machine */
+#define S_INIT      0
+#define S_COMMENT   1
+#define S_NUMBER    2
+#define S_IDENT     3
+#define S_PECIDENT  4
+#define S_HASH      5
+
+int parser_tokenize(struct parser *p, char *data) {
+    char *cp = data;
+    char *mark = NULL;
+    if ((p->tokenizer_state == S_IDENT) || (p->tokenizer_state == S_NUMBER)) {
+        mark = data;
+    }
+    // read the data char-by-char
+    while (*cp != '\0') {
+        if (p->tokenizer_state == S_INIT) {
+            if ((*cp == ' ') || (*cp == '\t') || (*cp == '\n')) {
+                // ignore whitespace
+            }
+            else if (*cp == '(') {
+                parser_parse(p, P_LPAREN, 0, NULL);
+            }
+            else if (*cp == ')') {
+                parser_parse(p, P_RPAREN, 0, NULL);
+            }
+            else if (*cp == ';') {
+                p->tokenizer_state = S_COMMENT;
+            }
+            else if (*cp == '#') {
+                p->tokenizer_state = S_HASH;
+            }
+            else if (*cp == '.') {
+                parser_parse(p, P_DOT, 0, NULL);
+            }
+            else if ((*cp >= '0') && (*cp <= '9')) {
+                mark = cp;
+                p->tokenizer_state = S_NUMBER;    
+            }
+            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
+                     || ((*cp >= 'a') && (*cp <= 'z')) 
+                     || ((*cp >= 'A') && (*cp <= 'Z')) 
+                     || ((*cp == '+') || (*cp == '-')) ) {
+                mark = cp;
+                p->tokenizer_state = S_IDENT;
+            }
+            else {
+                fprintf(stderr, 
+                    "Unexpected character '%c' in tokenizer state: %i\n", 
+                    *cp, p->tokenizer_state);
+                exit(1);
+            }
+        }
+        else if (p->tokenizer_state == S_COMMENT) {
+            if (*cp == '\n') {
+                p->tokenizer_state = S_INIT;
+            }
+            else {
+                // comment, ignore
+            }
+        }
+        else if (p->tokenizer_state == S_NUMBER) {
+            if ((*cp >= '0') && (*cp <= '9')) {
+                // still in number
+            }
+            else {
+                // end of number
+                p->tokenizer_state = S_INIT;
+                char *ep = cp-1;
+                int num_literal = strtol(mark, &ep, 10);
+                parser_parse(p, P_NUMBER, num_literal, NULL);
+                cp--;
+                mark = NULL;
+            }
+        }
+        else if (p->tokenizer_state == S_HASH) {
+            if (*cp == 't') {
+                parser_parse(p, P_BOOL, 1, NULL);
+                p->tokenizer_state = S_INIT;
+            }
+            else if (*cp == 'f') {
+                parser_parse(p, P_BOOL, 0, NULL);
+                p->tokenizer_state = S_INIT;
+            }
+            else if (*cp == '!') {
+                p->tokenizer_state = S_COMMENT;
+            }
+            else {
+                fprintf(stderr, 
+                    "Unexpected character '%c' in tokenizer state: %i\n", 
+                    *cp, p->tokenizer_state);
+                exit(1);
+            }
+        }
+        else if (p->tokenizer_state == S_IDENT) {
+            if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
+                || ((*cp >= 'a') && (*cp <= 'z')) 
+                || ((*cp >= '0') && (*cp <= '9')) 
+                || ((*cp >= 'A') && (*cp <= 'Z')) 
+                || (strchr("+-.@", *cp) != NULL) ) {
+                // still in identifier
+            }
+            else {
+                // end of identifier
+                p->tokenizer_state = S_INIT;
+                char *str = malloc(cp - mark + 1);
+                strncpy(str, mark, cp - mark);
+                str[cp - mark] = '\0';
+                parser_parse(p, P_IDENT, 0, str);
+                cp--;
+                mark = NULL;
+            }
+        }
+        else {
+            fprintf(stderr, "Unexpected tokenizer state: %i\n", p->tokenizer_state);
+            exit(1);
+        }
+        cp++;
+    }
+    if (mark) {
+        memmove(data, mark, cp-mark+1);
+        return cp-mark;
+    }
+    return 0;
+}
+
+struct parser* parser_new(struct allocator *alloc) {
+    struct parser *ret = malloc(sizeof(struct parser));
+    ret->alloc = alloc;
+    ret->tokenizer_state = S_INIT;
+    ret->exp_stack_top = NULL;
+    return ret;
+}
+
+void parser_free(struct parser *p) {
+    assert(p != NULL);
+    free(p);
+}
+
+int parser_consume(struct parser *p, char *data) {
+    assert(p != NULL);
+    assert(data != NULL);
+    
+    return parser_tokenize(p, data);
+}
+

@@ -87,6 +87,9 @@ value make_cons(struct allocator *a, value car, value cdr);
 #define car(x) (((struct cons*)value_to_cell(x))->car)
 #define cdr(x) (((struct cons*)value_to_cell(x))->cdr)
 
+#define set_car(x, y) (((struct cons*)value_to_cell(x))->car = y)
+#define set_cdr(x, y) (((struct cons*)value_to_cell(x))->cdr = y)
+
 /* Symbols
  *
  * Symbols are represented on the heap as a null-terminated string
