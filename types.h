@@ -37,6 +37,8 @@
  * types:
  *   000 - symbol
  *   001 - cons
+ *   010 - builtin2 (stuff callable from scheme but written in C, arity 2
+ *                   the pointer part is the address of the function to call)
  *
  * XXX will need boxes
  *
@@ -49,27 +51,28 @@
 
 typedef uint64_t value;
 
-#define value_is_immediate(x) (x & 1)
-#define value_type(x) (x & 15)
-#define value_to_cell(x) (x & ~15)
+#define value_is_immediate(x) ((x) & 1)
+#define value_type(x) ((x) & 15)
+#define value_to_cell(x) ((x) & ~15)
 
-#define TYPE_INT            0b0001
-#define TYPE_FLOAT          0b0011
-#define TYPE_ENUM           0b0101
+#define TYPE_INT              0b0001
+#define TYPE_FLOAT            0b0011
+#define TYPE_ENUM             0b0101
 
-#define TYPE_SYMBOL         0b0000
-#define TYPE_CONS           0b0010
+#define TYPE_SYMBOL           0b0000
+#define TYPE_CONS             0b0010
+#define TYPE_BUILTIN2         0b0100
 
 #define VALUE_NIL           0b000101
 #define VALUE_TRUE          0b010101
 #define VALUE_FALSE         0b100101
 #define VALUE_EMPTY_LIST    0b110101
 
-#define intval(x) ((int32_t)(x >> 32))
-#define make_int(a, x) (((uint64_t)x << 32) | TYPE_INT)
+#define intval(x) ((int32_t)((x) >> 32))
+#define make_int(a, x) (((uint64_t)(x) << 32) | TYPE_INT)
 // XXX float are broken, need reinterpret_cast style casting
-#define floatval(x) ((float)(x >> 32))
-#define make_float(a, x) (((uint64_t)x << 32) | TYPE_FLOAT)
+#define floatval(x) ((float)((x) >> 32))
+#define make_float(a, x) (((uint64_t)(x) << 32) | TYPE_FLOAT)
 
 /* Cons cells
  *
@@ -98,6 +101,15 @@ value make_cons(struct allocator *a, value car, value cdr);
 value make_symbol(struct allocator *a, char *s);
 
 #define symbol(x) ((char*)value_to_cell(x))
+
+/* Builtins
+ *
+ * */
+
+typedef value (*t_builtin2)(struct allocator*, value, value);
+
+value make_builtin2(struct allocator *a, t_builtin2 funcptr);
+t_builtin2 builtin2_ptr(value);
 
 /* Input and Output
  *

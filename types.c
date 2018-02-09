@@ -66,3 +66,16 @@ void dump_value(value v) {
             assert(0 && "unsupported value type");
     }
 }
+
+value make_builtin2(struct allocator *a, t_builtin2 funcptr) {
+    t_builtin2 *p = allocator_alloc(a, sizeof(t_builtin2));
+    *p = funcptr;
+    value ret = (uint64_t)p | TYPE_BUILTIN2;
+    return ret;
+}
+
+t_builtin2 builtin2_ptr(value v) {
+    assert(value_type(v) == TYPE_BUILTIN2);
+    t_builtin2 *p = (t_builtin2*)value_to_cell(v);
+    return *p;
+}

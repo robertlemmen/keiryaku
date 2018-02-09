@@ -27,7 +27,8 @@ void free_block(block b) {
 }
 
 cell alloc_cell(block b, int s) {
-    // XXX for now we use a non-freeing bump allocator
+    // XXX for now we use a non-freeing bump allocator, we store it in
+    // the first bytes of the block
     uint16_t *cell_count_ptr = b;
    
     assert(*cell_count_ptr >= 4096);
@@ -53,6 +54,8 @@ struct allocator {
 struct allocator* allocator_new(void) {
     struct allocator *ret = malloc(sizeof(struct allocator));
     ret->b = alloc_block();
+    // XXX we should probably have a few arenas for common fixed sizes, perhaps
+    // even with special handling...
     return ret;
 }
 

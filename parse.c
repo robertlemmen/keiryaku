@@ -7,11 +7,14 @@
 #include <unistd.h>
 
 #include "types.h"
+#include "interp.h"
 
 struct parser {
     struct allocator *alloc;
     int tokenizer_state;
     struct expr_lnk *exp_stack_top;
+    // XXX perhaps should be passed in through constructor...
+    struct interp_ctx *interp;
 };
 
 #define P_LPAREN    0
@@ -122,8 +125,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
 
     if (!p->exp_stack_top) {
         // we have a fully parsed expression, evaluate
-        // XXX can't eval yet, just dump
-        dump_value(cv);
+        dump_value(interp_eval(p->interp, cv));
         printf("\n");
         
         if (isatty(fileno(stdin))) {
@@ -237,10 +239,13 @@ int parser_tokenize(struct parser *p, char *data) {
             else {
                 // end of identifier
                 p->tokenizer_state = S_INIT;
+                // XXX if we could pass through the string differently, we could
+                // avoid allocating another copy...
                 char *str = malloc(cp - mark + 1);
                 strncpy(str, mark, cp - mark);
                 str[cp - mark] = '\0';
                 parser_parse(p, P_IDENT, 0, str);
+                free(str);
                 cp--;
                 mark = NULL;
             }
@@ -263,11 +268,13 @@ struct parser* parser_new(struct allocator *alloc) {
     ret->alloc = alloc;
     ret->tokenizer_state = S_INIT;
     ret->exp_stack_top = NULL;
+    ret->interp = interp_new(alloc);
     return ret;
 }
 
 void parser_free(struct parser *p) {
     assert(p != NULL);
+    interp_free(p->interp);
     free(p);
 }
 

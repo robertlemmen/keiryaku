@@ -21,7 +21,8 @@
  *   (cell_addr & 0x00000000000FFFFF >> 8) is the index of the cell into the block
  *   adding these two gives the address of the metadata byte
  *
- * XXX what to store in metadata? depends on GC design
+ * XXX what to store in metadata? depends on GC design, but we need size for
+ * variable blobs...
  *
  * Note that the first 64kB of the block are not used by cells, consequently the first
  * 4096 metadata bytes are not used either, these can be used to store other 
