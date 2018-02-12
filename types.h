@@ -23,10 +23,19 @@
  *
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
- *   00 - Nil (internal, not usable in the scheme layer)
- *   01 - True
- *   10 - False
- *   11 - Empty List
+ *   0000 - Nil (internal, not usable in the scheme layer)
+ *   0001 - True
+ *   0010 - False
+ *   0011 - Empty List
+ *
+ * 'Specials' all have the fourth bit of that set, to make testing for them
+ * easier:
+ *   1000 'If' Special
+ *   1001 'Define' Special
+ *   1010 'Lambda' Special
+ *   1011 'Begin' Special
+ *   1100 'Quote' Special
+ *   1101 'Let' Special
  *
  * this means that enumerated "special" values can be compared for equality 
  * directly, by comparing the value bitwise.
@@ -63,10 +72,22 @@ typedef uint64_t value;
 #define TYPE_CONS             0b0010
 #define TYPE_BUILTIN2         0b0100
 
-#define VALUE_NIL           0b000101
-#define VALUE_TRUE          0b010101
-#define VALUE_FALSE         0b100101
-#define VALUE_EMPTY_LIST    0b110101
+#define VALUE_NIL         0b00000101
+#define VALUE_TRUE        0b00010101
+#define VALUE_FALSE       0b00100101
+#define VALUE_EMPTY_LIST  0b00110101
+
+#define VALUE_SP_IF       0b10000101
+#define VALUE_SP_DEFINE   0b10010101
+#define VALUE_SP_LAMBDA   0b10100101
+#define VALUE_SP_BEGIN    0b10110101
+#define VALUE_SP_QUOTE    0b11000101
+#define VALUE_SP_LET      0b11010101
+
+#define value_is_special(x) (((x) & 0b10001111) == 0b10000101)
+
+/* values are considered true if they are not #f or an empty list */
+#define value_is_true(x) (((x) & 0b11101111) != 0b00100101)
 
 #define intval(x) ((int32_t)((x) >> 32))
 #define make_int(a, x) (((uint64_t)(x) << 32) | TYPE_INT)
