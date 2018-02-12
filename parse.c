@@ -11,18 +11,21 @@
 
 struct parser {
     struct allocator *alloc;
-    int tokenizer_state;
     struct expr_lnk *exp_stack_top;
     // XXX perhaps should be passed in through constructor...
     struct interp_ctx *interp;
+    int tokenizer_state;
 };
 
+/* more parser states means you need to widen the fiel in expr_lnk below! */
 #define P_LPAREN    0
 #define P_RPAREN    1
-#define P_NUMBER    2
-#define P_DOT       3
-#define P_IDENT     4
-#define P_BOOL      5
+#define P_LBRACKET  2
+#define P_RBRACKET  3
+#define P_NUMBER    4
+#define P_DOT       5
+#define P_IDENT     6
+#define P_BOOL      7
 
 #define PP_CAR  0
 #define PP_MID  1
@@ -32,8 +35,9 @@ struct parser {
 struct expr_lnk {
     value content;
     struct expr_lnk *outer;
-    int implicit;
-    int parse_pos;
+    unsigned int implicit : 1;
+    unsigned int bracket : 1;
+    unsigned int parse_pos : 3;
 };
 
 // store the passed value in the current position of the top element of 
@@ -57,6 +61,7 @@ void parser_store_cell(struct parser *p, value cv) {
             cl->content = cv;
             cl->outer = p->exp_stack_top;
             cl->implicit = 1;
+            cl->bracket = 0;
             p->exp_stack_top = cl;
             p->exp_stack_top->parse_pos = PP_MID;
         }
@@ -72,16 +77,19 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
     value cv = VALUE_NIL;\
     struct expr_lnk *cl;
     switch (tok) {
+        case P_LBRACKET:
         case P_LPAREN:
             cv = make_cons(p->alloc, VALUE_NIL, VALUE_NIL);
             parser_store_cell(p, cv);
             cl = malloc(sizeof(struct expr_lnk));
             cl->content = cv;
             cl->implicit = 0;
+            cl->bracket = tok == P_LBRACKET;
             cl->outer = p->exp_stack_top;
             p->exp_stack_top = cl;
             cl->parse_pos = PP_CAR;
             break;
+        case P_RBRACKET:
         case P_RPAREN:
             // reduce expression stack
             cl = p->exp_stack_top;
@@ -93,6 +101,9 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
                 }
                 p->exp_stack_top = cl->outer;
                 cv = cl->content;
+                if (cl->bracket != (tok == P_RBRACKET)) {
+                    fprintf(stderr, "mismatched parenthesis and bracket\n");
+                }
                 free(cl);
             }
             else {
@@ -159,6 +170,12 @@ int parser_tokenize(struct parser *p, char *data) {
             }
             else if (*cp == ')') {
                 parser_parse(p, P_RPAREN, 0, NULL);
+            }
+            else if (*cp == '[') {
+                parser_parse(p, P_LBRACKET, 0, NULL);
+            }
+            else if (*cp == ']') {
+                parser_parse(p, P_RBRACKET, 0, NULL);
             }
             else if (*cp == ';') {
                 p->tokenizer_state = S_COMMENT;
