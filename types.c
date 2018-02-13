@@ -41,11 +41,12 @@ void dump_value(value v) {
                     printf("()");
                     break;
                 default:
-                    assert(0 && "unsupported enum value");
+                    printf("<?enum %li>", v);
+                    //assert(0 && "unsupported enum value");
             }
             break;
         case TYPE_SYMBOL:
-            printf("%s", symbol(v));
+            printf("%s", value_to_symbol(v));
             break;
         case TYPE_CONS:
             printf("(");
@@ -63,11 +64,13 @@ void dump_value(value v) {
             printf(")");
             break;
         default:
-            assert(0 && "unsupported value type");
+            printf("<?type %li>", value_type(v));
+//            assert(0 && "unsupported value type");
     }
 }
 
 value make_builtin2(struct allocator *a, t_builtin2 funcptr) {
+    // XXX why can't this be an immediate?
     t_builtin2 *p = allocator_alloc(a, sizeof(t_builtin2));
     *p = funcptr;
     value ret = (uint64_t)p | TYPE_BUILTIN2;

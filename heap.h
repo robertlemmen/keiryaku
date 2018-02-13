@@ -26,7 +26,11 @@
  *
  * Note that the first 64kB of the block are not used by cells, consequently the first
  * 4096 metadata bytes are not used either, these can be used to store other 
- * information, e.g. allocator data. 
+ * information, e.g. allocator data.
+ *
+ * We should have buckets of blocks for allocations of common fixed sizes, e.g.
+ * 16 bytes like cons cells. these could then just be a bump allocator + free
+ * list!
  * */
 
 #define BLOCK_SIZE 0x100000

@@ -48,6 +48,7 @@
  *   001 - cons
  *   010 - builtin2 (stuff callable from scheme but written in C, arity 2
  *                   the pointer part is the address of the function to call)
+ *   100 - interpreter lambda
  *
  * XXX will need boxes
  *
@@ -71,6 +72,7 @@ typedef uint64_t value;
 #define TYPE_SYMBOL           0b0000
 #define TYPE_CONS             0b0010
 #define TYPE_BUILTIN2         0b0100
+#define TYPE_INTERP_LAMBDA    0b1000
 
 #define VALUE_NIL         0b00000101
 #define VALUE_TRUE        0b00010101
@@ -120,17 +122,20 @@ value make_cons(struct allocator *a, value car, value cdr);
  * */
 
 value make_symbol(struct allocator *a, char *s);
-
-#define symbol(x) ((char*)value_to_cell(x))
+#define value_to_symbol(x) ((char*)value_to_cell(x))
 
 /* Builtins
- *
  * */
 
 typedef value (*t_builtin2)(struct allocator*, value, value);
 
 value make_builtin2(struct allocator *a, t_builtin2 funcptr);
 t_builtin2 builtin2_ptr(value);
+
+/* Lambdas
+ * */
+#define make_interp_lambda(x) ((uint64_t)(x) | TYPE_INTERP_LAMBDA)
+#define value_to_interp_lambda(x) ((struct interp_lambda*)value_to_cell(x))
 
 /* Input and Output
  *
