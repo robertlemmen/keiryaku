@@ -17,7 +17,7 @@ struct parser {
     int tokenizer_state;
 };
 
-/* more parser states means you need to widen the fiel in expr_lnk below! */
+/* more parser states means you need to widen the field in expr_lnk below! */
 #define P_LPAREN    0
 #define P_RPAREN    1
 #define P_LBRACKET  2
@@ -150,9 +150,10 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
 #define S_COMMENT   1
 #define S_NUMBER    2
 #define S_IDENT     3
-#define S_PECIDENT  4
-#define S_HASH      5
+#define S_HASH      4
 
+// XXX and EOF token would be interesting, would mean we can detect mismatched
+// parens easier...
 int parser_tokenize(struct parser *p, char *data) {
     char *cp = data;
     char *mark = NULL;
@@ -190,6 +191,8 @@ int parser_tokenize(struct parser *p, char *data) {
                 mark = cp;
                 p->tokenizer_state = S_NUMBER;    
             }
+            // XXX we should treat minus correctly, could mean number or
+            // symbol...
             else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
                      || ((*cp >= 'a') && (*cp <= 'z')) 
                      || ((*cp >= 'A') && (*cp <= 'Z')) 
@@ -236,6 +239,9 @@ int parser_tokenize(struct parser *p, char *data) {
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == '!') {
+                // this is a bit weird and perhaps wrong, but allows she-bang
+                // lines. we could be stricter and only accept these at the very
+                // beginning of the file...
                 p->tokenizer_state = S_COMMENT;
             }
             else {

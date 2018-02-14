@@ -9,5 +9,11 @@
 ((lambda (n)
     (if (= n 0)
         0
-        1)
- 3)
+        (+ n 1)))
+ 8)
+
+(define X (+ 4 5))
+(+ 1 X)
+
+(define z 8)
+(let [(x 1) (y 2)] (+ (+ x y) z))

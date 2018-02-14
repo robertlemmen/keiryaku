@@ -51,6 +51,27 @@ value builtin_plus(struct allocator *alloc, value a, value b) {
     return make_int(alloc, intval(a) + intval(b));
 }
 
+value builtin_minus(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return make_int(alloc, intval(a) - intval(b));
+}
+
+value builtin_mul(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return make_int(alloc, intval(a) * intval(b));
+}
+
+value builtin_div(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return make_int(alloc, intval(a) / intval(b));
+}
+
 value builtin_equals(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
@@ -63,14 +84,19 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     ret->alloc = alloc;
     ret->env = NULL;
 
-    // XXX create basic environment
+    // create basic environment
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "+"), make_builtin2(ret->alloc, &builtin_plus));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "-"), make_builtin2(ret->alloc, &builtin_minus));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "*"), make_builtin2(ret->alloc, &builtin_mul));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "/"), make_builtin2(ret->alloc, &builtin_div));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "="), make_builtin2(ret->alloc, &builtin_equals));
 
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "lambda"), VALUE_SP_LAMBDA);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "begin"), VALUE_SP_BEGIN);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "quote"), VALUE_SP_QUOTE);
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "let"), VALUE_SP_LET);
 
     return ret;
 }
@@ -122,6 +148,25 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                 return interp_eval(i, pos_args[2]);
             }
             break;
+        case VALUE_SP_DEFINE:
+            arg_count = interp_collect_list(args, 2, pos_args);
+            if (arg_count != 2) {
+                fprintf(stderr, "Arity error in application of special 'define': expected 2 args but got %i\n",
+                    arg_count);
+                return VALUE_NIL;
+            }
+            // XXX do we need to eval it first?
+            if (value_type(pos_args[0]) != TYPE_SYMBOL) {
+                fprintf(stderr, "Type error in application of special 'define': expected a symbol args but got %li\n",
+                    // XXX we should have a textual type, just for error
+                    // repoting and logging
+                    value_type(pos_args[0]));
+                return VALUE_NIL;
+            }
+            i->env = env_bind(i->alloc, i->env, pos_args[0], interp_eval(i, pos_args[1]));
+            // XXX or what does it return
+            return VALUE_NIL;
+            break;
         case VALUE_SP_LAMBDA:
             arg_count = interp_collect_list(args, 2, pos_args);
             if (arg_count != 2) {
@@ -155,6 +200,35 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                 return VALUE_NIL;
             }
             return pos_args[0];
+            break;
+        case VALUE_SP_LET:
+            arg_count = interp_collect_list(args, 2, pos_args);
+            if (arg_count != 2) {
+                fprintf(stderr, "Arity error in application of special 'let': expected 2 args but got %i\n",
+                    arg_count);
+                return VALUE_NIL;
+            }
+            struct interp_env *old_env = i->env;
+            value current_arg = pos_args[0];
+            while (value_type(current_arg) == TYPE_CONS) {
+                value arg_pair = car(current_arg);
+                if (value_type(arg_pair) != TYPE_CONS) {
+                    fprintf(stderr, "arg binding to let is not a pair\n");
+                    return VALUE_NIL;
+                }
+                // XXX is there not a way this can be evaled?
+                value arg_name = car(arg_pair);
+                if (value_type(arg_name) != TYPE_SYMBOL) {
+                    fprintf(stderr, "first part of arg binding to let is not a symbol\n");
+                    return VALUE_NIL;
+                }
+                value arg_value = interp_eval(i, car(cdr(arg_pair)));
+                i->env = env_bind(i->alloc, i->env, arg_name, arg_value);
+                current_arg = cdr(current_arg);
+            }
+            value result = interp_eval(i, pos_args[1]);
+            i->env = old_env;
+            return result;
             break;
         default:
             fprintf(stderr, "Unknown special 0x%lX\n", special);
