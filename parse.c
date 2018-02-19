@@ -151,6 +151,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
 #define S_NUMBER    2
 #define S_IDENT     3
 #define S_HASH      4
+#define S_MINUS     5
 
 // XXX and EOF token would be interesting, would mean we can detect mismatched
 // parens easier...
@@ -191,12 +192,13 @@ int parser_tokenize(struct parser *p, char *data) {
                 mark = cp;
                 p->tokenizer_state = S_NUMBER;    
             }
-            // XXX we should treat minus correctly, could mean number or
-            // symbol...
-            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
+            else if (*cp == '-') {
+                mark = cp;
+                p->tokenizer_state = S_MINUS;
+            }
+            else if (   (strchr("!$%&*/:<=>?^_~+", *cp) != NULL) 
                      || ((*cp >= 'a') && (*cp <= 'z')) 
-                     || ((*cp >= 'A') && (*cp <= 'Z')) 
-                     || ((*cp == '+') || (*cp == '-')) ) {
+                     || ((*cp >= 'A') && (*cp <= 'Z')) ) {
                 mark = cp;
                 p->tokenizer_state = S_IDENT;
             }
@@ -261,6 +263,31 @@ int parser_tokenize(struct parser *p, char *data) {
             }
             else {
                 // end of identifier
+                p->tokenizer_state = S_INIT;
+                // XXX if we could pass through the string differently, we could
+                // avoid allocating another copy...
+                char *str = malloc(cp - mark + 1);
+                strncpy(str, mark, cp - mark);
+                str[cp - mark] = '\0';
+                parser_parse(p, P_IDENT, 0, str);
+                free(str);
+                cp--;
+                mark = NULL;
+            }
+        }
+        else if (p->tokenizer_state == S_MINUS) {
+            if ((*cp >= '0') && (*cp <= '9')) {
+                p->tokenizer_state = S_NUMBER;
+            }
+            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
+                || ((*cp >= 'a') && (*cp <= 'z')) 
+                || ((*cp >= '0') && (*cp <= '9')) 
+                || ((*cp >= 'A') && (*cp <= 'Z')) 
+                || (strchr("+-.@", *cp) != NULL) ) {
+                p->tokenizer_state = S_IDENT;
+            }
+            else {
+                // end, treat as identifier
                 p->tokenizer_state = S_INIT;
                 // XXX if we could pass through the string differently, we could
                 // avoid allocating another copy...
