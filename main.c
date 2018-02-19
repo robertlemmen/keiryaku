@@ -7,12 +7,13 @@
 #include "heap.h"
 #include "eval.h"
 #include "parse.h"
+#include "version.h"
 
 #define BUFSIZE 4096
 
 int main(int argc, char **argv) {
     if (isatty(fileno(stdin))) {
-        printf("-=[ keiryaku ]=-\n\n");
+        printf("-=[ keiryaku %s ]=-\n\n", software_version());
         printf("> ");
     }
 
