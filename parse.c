@@ -202,6 +202,7 @@ int parser_tokenize(struct parser *p, char *data) {
     // read the data char-by-char
     while (*cp != '\0') {
         if (p->tokenizer_state == S_INIT) {
+            // XXX we should also tolerate dos files, needs test too
             if ((*cp == ' ') || (*cp == '\t') || (*cp == '\n')) {
                 // ignore whitespace
             }

@@ -79,6 +79,18 @@ value builtin_equals(struct allocator *alloc, value a, value b) {
     return intval(a) == intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
+value builtin_car(struct allocator *alloc, value v) {
+    assert(value_type(v) == TYPE_CONS);
+
+    return car(v);
+}
+
+value builtin_cdr(struct allocator *alloc, value v) {
+    assert(value_type(v) == TYPE_CONS);
+
+    return cdr(v);
+}
+
 struct interp_ctx* interp_new(struct allocator *alloc) {
     struct interp_ctx *ret = malloc(sizeof(struct interp_ctx));
     ret->alloc = alloc;
@@ -90,6 +102,8 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "*"), make_builtin2(ret->alloc, &builtin_mul));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "/"), make_builtin2(ret->alloc, &builtin_div));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "="), make_builtin2(ret->alloc, &builtin_equals));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "car"), make_builtin1(ret->alloc, &builtin_car));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "cdr"), make_builtin1(ret->alloc, &builtin_cdr));
 
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
@@ -258,16 +272,25 @@ value interp_eval(struct interp_ctx *i, value expr) {
             else if (value_is_special(op)) {
                 return interp_apply_special(i, op, cdr(expr));
             }
+            else if (value_type(op) == TYPE_BUILTIN1) {
+                t_builtin1 funcptr = builtin1_ptr(op);
+                value pos_args[1];
+                int arg_count = interp_collect_list(cdr(expr), 1, pos_args);
+                if (arg_count != 1) {
+                    fprintf(stderr, "Arity error in application of builtin: expected 1 args but got %i\n",
+                        arg_count);
+                    return VALUE_NIL;
+                }
+                return funcptr(i->alloc, interp_eval(i, pos_args[0]));
+            }
             else if (value_type(op) == TYPE_BUILTIN2) {
                 t_builtin2 funcptr = builtin2_ptr(op);
                 value pos_args[2];
                 int arg_count = interp_collect_list(cdr(expr), 2, pos_args);
                 if (arg_count != 2) {
-                    if (arg_count != 1) {
-                        fprintf(stderr, "Arity error in application of builtin: expected 2 args but got %i\n",
-                            arg_count);
-                        return VALUE_NIL;
-                    }
+                    fprintf(stderr, "Arity error in application of builtin: expected 2 args but got %i\n",
+                        arg_count);
+                    return VALUE_NIL;
                 }
                 return funcptr(i->alloc, interp_eval(i, pos_args[0]), interp_eval(i, pos_args[1]));
             }

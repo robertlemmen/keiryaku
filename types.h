@@ -46,8 +46,9 @@
  * types:
  *   000 - symbol
  *   001 - cons
- *   010 - builtin2 (stuff callable from scheme but written in C, arity 2
+ *   010 - builtin1 (stuff callable from scheme but written in C, arity 1
  *                   the pointer part is the address of the function to call)
+ *   011 - builtin2
  *   100 - interpreter lambda
  *
  * XXX will need boxes
@@ -71,7 +72,8 @@ typedef uint64_t value;
 
 #define TYPE_SYMBOL           0b0000
 #define TYPE_CONS             0b0010
-#define TYPE_BUILTIN2         0b0100
+#define TYPE_BUILTIN1         0b0100
+#define TYPE_BUILTIN2         0b0110
 #define TYPE_INTERP_LAMBDA    0b1000
 
 #define VALUE_NIL         0b00000101
@@ -127,10 +129,14 @@ value make_symbol(struct allocator *a, char *s);
 /* Builtins
  * */
 
+typedef value (*t_builtin1)(struct allocator*, value);
 typedef value (*t_builtin2)(struct allocator*, value, value);
 
 value make_builtin2(struct allocator *a, t_builtin2 funcptr);
 t_builtin2 builtin2_ptr(value);
+
+value make_builtin1(struct allocator *a, t_builtin1 funcptr);
+t_builtin1 builtin1_ptr(value);
 
 /* Lambdas
  * */

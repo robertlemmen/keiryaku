@@ -82,3 +82,17 @@ t_builtin2 builtin2_ptr(value v) {
     t_builtin2 *p = (t_builtin2*)value_to_cell(v);
     return *p;
 }
+
+value make_builtin1(struct allocator *a, t_builtin1 funcptr) {
+    // XXX why can't this be an immediate?
+    t_builtin1 *p = allocator_alloc(a, sizeof(t_builtin1));
+    *p = funcptr;
+    value ret = (uint64_t)p | TYPE_BUILTIN1;
+    return ret;
+}
+
+t_builtin1 builtin1_ptr(value v) {
+    assert(value_type(v) == TYPE_BUILTIN1);
+    t_builtin1 *p = (t_builtin1*)value_to_cell(v);
+    return *p;
+}
