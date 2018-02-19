@@ -26,6 +26,7 @@ struct parser {
 #define P_DOT       5
 #define P_IDENT     6
 #define P_BOOL      7
+#define P_QUOTE     8
 
 #define PP_CAR  0
 #define PP_MID  1
@@ -36,6 +37,7 @@ struct expr_lnk {
     value content;
     struct expr_lnk *outer;
     unsigned int implicit : 1;
+    unsigned int quote : 1;
     unsigned int bracket : 1;
     unsigned int parse_pos : 3;
 };
@@ -61,6 +63,7 @@ void parser_store_cell(struct parser *p, value cv) {
             cl->content = cv;
             cl->outer = p->exp_stack_top;
             cl->implicit = 1;
+            cl->quote = cl->outer->quote;
             cl->bracket = 0;
             p->exp_stack_top = cl;
             p->exp_stack_top->parse_pos = PP_MID;
@@ -84,6 +87,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
             cl = malloc(sizeof(struct expr_lnk));
             cl->content = cv;
             cl->implicit = 0;
+            cl->quote = 0;
             cl->bracket = tok == P_LBRACKET;
             cl->outer = p->exp_stack_top;
             p->exp_stack_top = cl;
@@ -109,6 +113,15 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
             else {
                 printf("syntax error: ')' without open s-expression\n");
             }
+            // also reduce quote expressions on the stack
+            cl = p->exp_stack_top;
+            while (cl && cl->quote) {
+                cv = cl->content;
+                struct expr_lnk *tmp = cl;
+                cl = cl->outer;
+                free(tmp);
+            }
+            p->exp_stack_top = cl;
             break;
         case P_NUMBER:
             cv = make_int(p->alloc, num);
@@ -128,6 +141,31 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
             break;
         case P_IDENT:
             cv = make_symbol(p->alloc, str);
+            parser_store_cell(p, cv);
+            // also reduce quote expressions on the stack
+            cl = p->exp_stack_top;
+            while (cl && cl->quote) {
+                cv = cl->content;
+                struct expr_lnk *tmp = cl;
+                cl = cl->outer;
+                free(tmp);
+            }
+            p->exp_stack_top = cl;
+            break;
+        case P_QUOTE:
+            // XXX this is a combination of stuff above, could be refactored to
+            // avoid duplication, also around reduction of quote expressions
+            cv = make_cons(p->alloc, VALUE_NIL, VALUE_NIL);
+            parser_store_cell(p, cv);
+            cl = malloc(sizeof(struct expr_lnk));
+            cl->content = cv;
+            cl->implicit = 0;
+            cl->quote = 1;
+            cl->bracket = 0;
+            cl->outer = p->exp_stack_top;
+            p->exp_stack_top = cl;
+            cl->parse_pos = PP_CAR;
+            cv = make_symbol(p->alloc, "quote");
             parser_store_cell(p, cv);
             break;
         default:
@@ -178,6 +216,9 @@ int parser_tokenize(struct parser *p, char *data) {
             }
             else if (*cp == ']') {
                 parser_parse(p, P_RBRACKET, 0, NULL);
+            }
+            else if (*cp == '\'') {
+                parser_parse(p, P_QUOTE, 0, NULL);
             }
             else if (*cp == ';') {
                 p->tokenizer_state = S_COMMENT;
