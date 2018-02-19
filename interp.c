@@ -91,6 +91,48 @@ value builtin_cdr(struct allocator *alloc, value v) {
     return cdr(v);
 }
 
+value builtin_and(struct allocator *alloc, value a, value b) {
+    return ( (a != VALUE_EMPTY_LIST)
+          && (a != VALUE_FALSE)
+          && (b != VALUE_EMPTY_LIST)
+          && (b != VALUE_FALSE)) 
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_not(struct allocator *alloc, value v) {
+    return ( (v != VALUE_EMPTY_LIST)
+          && (v != VALUE_FALSE) )
+        ? VALUE_FALSE
+        : VALUE_TRUE;
+}
+
+value builtin_pair(struct allocator *alloc, value v) {
+    return (value_type(v) == TYPE_CONS)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_eq(struct allocator *alloc, value a, value b) {
+    if (a == b) {
+        return VALUE_TRUE;
+    }
+    if ((value_type(a) == TYPE_SYMBOL) && (value_type(b) == TYPE_SYMBOL)) {
+        if (strcmp(value_to_symbol(a), value_to_symbol(b)) == 0) {
+            return VALUE_TRUE;
+        }
+    }
+    return VALUE_FALSE;
+}
+
+value builtin_null(struct allocator *alloc, value v) {
+    // XXX we would need a way to make sure every cons cell with nil+nil gets
+    // reduced to VALUE_EMPTY_LIST
+    return (v == VALUE_EMPTY_LIST)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
 struct interp_ctx* interp_new(struct allocator *alloc) {
     struct interp_ctx *ret = malloc(sizeof(struct interp_ctx));
     ret->alloc = alloc;
@@ -104,6 +146,12 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "="), make_builtin2(ret->alloc, &builtin_equals));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "car"), make_builtin1(ret->alloc, &builtin_car));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "cdr"), make_builtin1(ret->alloc, &builtin_cdr));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "cons"), make_builtin2(ret->alloc, &make_cons));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "and"), make_builtin2(ret->alloc, &builtin_and));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "not"), make_builtin1(ret->alloc, &builtin_not));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "pair?"), make_builtin1(ret->alloc, &builtin_pair));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "eq?"), make_builtin2(ret->alloc, &builtin_eq));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "null?"), make_builtin1(ret->alloc, &builtin_null));
 
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
@@ -267,7 +315,8 @@ value interp_eval(struct interp_ctx *i, value expr) {
         case TYPE_CONS:;
             value op = interp_eval(i, car(expr));
             if (op == VALUE_NIL) {
-                return op;
+                // XXX is this right? what if the cdr is set?
+                return VALUE_EMPTY_LIST;
             }
             else if (value_is_special(op)) {
                 return interp_apply_special(i, op, cdr(expr));
@@ -305,7 +354,8 @@ value interp_eval(struct interp_ctx *i, value expr) {
                 struct interp_env *application_env = lambda->env;
                 value current_arg = cdr(expr);
                 for (int idx = 0; idx < application_arity; idx++) {
-                    application_env = env_bind(i->alloc, application_env, lambda->arg_names[idx], car(current_arg));
+                    application_env = env_bind(i->alloc, application_env, lambda->arg_names[idx], 
+                        interp_eval(i, car(current_arg)));
                     current_arg = cdr(current_arg);
                 }
                 struct interp_env *previous_env = i->env;

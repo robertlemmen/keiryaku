@@ -95,9 +95,20 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
             break;
         case P_RBRACKET:
         case P_RPAREN:
-            // reduce expression stack
             cl = p->exp_stack_top;
             if (cl) {
+                if (cl->parse_pos == PP_MID) {
+                    set_cdr(p->exp_stack_top->content, VALUE_EMPTY_LIST);
+                }
+                if ((car(cl->content) == VALUE_NIL) && (cdr(cl->content) == VALUE_NIL)) {
+                    cl->content = VALUE_EMPTY_LIST;
+                    if (cl->outer) {
+                        if (cl->outer->parse_pos == PP_MID) {
+                            set_car(cl->outer->content, cl->content);
+                        }
+                    }
+                }
+                // reduce expression stack
                 while (cl->implicit) {
                     struct expr_lnk *tmp = cl;
                     cl = cl->outer;

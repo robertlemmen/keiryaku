@@ -50,16 +50,19 @@ void dump_value(value v) {
             break;
         case TYPE_CONS:
             printf("(");
-            dump_value(car(v));
-            while (   (cdr(v) != VALUE_EMPTY_LIST) 
-                   && (value_type(cdr(v)) == TYPE_CONS) ) {
-                printf(" ");
-                v = cdr(v);
+            if ((car(v) != VALUE_NIL) || (cdr(v) != VALUE_NIL)) {
                 dump_value(car(v));
-            }
-            if (cdr(v) != VALUE_EMPTY_LIST) {
-                printf(" . ");
-                dump_value(cdr(v));
+                while (   (cdr(v) != VALUE_EMPTY_LIST) 
+                       && (cdr(v) != VALUE_NIL)
+                       && (value_type(cdr(v)) == TYPE_CONS) ) {
+                    printf(" ");
+                    v = cdr(v);
+                    dump_value(car(v));
+                }
+                if ((cdr(v) != VALUE_EMPTY_LIST) && (cdr(v) != VALUE_NIL)) {
+                    printf(" . ");
+                    dump_value(cdr(v));
+                }
             }
             printf(")");
             break;
