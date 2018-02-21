@@ -1,7 +1,9 @@
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
 #include <unistd.h>
+#include <errno.h>
 
 #include "types.h"
 #include "heap.h"
@@ -10,6 +12,26 @@
 #include "version.h"
 
 #define BUFSIZE 4096
+
+// XXX getopt for ags, e.g. not to load base env and/or compiler
+
+void consume_stream(struct parser *p, FILE *f) {
+    char buffer[BUFSIZE];
+    int pos = 0;
+    while (fgets(&buffer[pos], BUFSIZE-1-pos, f)) {
+        pos = parser_consume(p, buffer);
+    }
+}
+
+void consume_file(struct parser *p, char *fname) {
+    FILE *fs = fopen(fname, "r");
+    if (!fs) {
+        fprintf(stderr, "Could not open file '%s': %s\n", fname, strerror(errno));
+        exit(1);
+    }
+    consume_stream(p, fs);
+    fclose(fs);
+}
 
 int main(int argc, char **argv) {
     if (isatty(fileno(stdin))) {
@@ -20,26 +42,9 @@ int main(int argc, char **argv) {
     struct allocator *a = allocator_new();
     struct parser *p = parser_new(a);
 
-    char buffer[BUFSIZE];
-    int pos = 0;
-    while (fgets(&buffer[pos], BUFSIZE-1-pos, stdin)) {
-        pos = parser_consume(p, buffer);
-    }
-/*
+    consume_file(p, "compiler.ss");
+    consume_stream(p, stdin);
 
-    value t = make_cons(a, make_int(a, 42), VALUE_EMPTY_LIST);
-    value v = make_cons(a, VALUE_TRUE, t);
-    assert(value_type(v) == TYPE_CONS);
-    assert(car(v) == VALUE_TRUE);
-    assert(value_type(cdr(v)) == TYPE_CONS);
-    dump_value(v);
-    printf("\n");
-
-    v = make_symbol(a, "test234");
-    assert(strcmp(symbol(v), "test234") == 0);
-    dump_value(v);
-    printf("\n");
-*/
     parser_free(p);
     allocator_free(a);
 

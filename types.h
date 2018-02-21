@@ -36,6 +36,7 @@
  *   1011 'Begin' Special
  *   1100 'Quote' Special
  *   1101 'Let' Special
+ *   1110 'Apply' Special
  *
  * this means that enumerated "special" values can be compared for equality 
  * directly, by comparing the value bitwise.
@@ -87,6 +88,7 @@ typedef uint64_t value;
 #define VALUE_SP_BEGIN    0b10110101
 #define VALUE_SP_QUOTE    0b11000101
 #define VALUE_SP_LET      0b11010101
+#define VALUE_SP_APPLY    0b11100101
 
 #define value_is_special(x) (((x) & 0b10001111) == 0b10000101)
 

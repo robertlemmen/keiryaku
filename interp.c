@@ -17,13 +17,15 @@ struct interp_ctx {
 };
 
 struct interp_lambda {
-    int arity;
+    uint_fast32_t arity : 31;
+    uint_fast32_t variadic : 1;
     value *arg_names;
     value body;
     struct interp_env *env;
 };
 
 value env_lookup(struct interp_env *env, value symbol) {
+    assert(value_type(symbol) == TYPE_SYMBOL);
     while (env) {
         assert(value_type(env->name) == TYPE_SYMBOL);
         if (strcmp(value_to_symbol(env->name), value_to_symbol(symbol)) == 0) {
@@ -42,6 +44,19 @@ struct interp_env* env_bind(struct allocator *alloc, struct interp_env *env, val
     ret->name = symbol;
     ret->value = value;
     return ret;
+}
+
+struct interp_env* env_rebind(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
+    assert(value_type(symbol) == TYPE_SYMBOL);
+    struct interp_env *ce = env;
+    while (ce) {
+        if (strcmp(value_to_symbol(symbol), value_to_symbol(ce->name)) == 0) {
+            ce->value = value;
+            return env;
+        }
+        ce = ce->outer;
+    }
+    return env_bind(alloc, env, symbol, value);
 }
 
 value builtin_plus(struct allocator *alloc, value a, value b) {
@@ -91,22 +106,6 @@ value builtin_cdr(struct allocator *alloc, value v) {
     return cdr(v);
 }
 
-value builtin_and(struct allocator *alloc, value a, value b) {
-    return ( (a != VALUE_EMPTY_LIST)
-          && (a != VALUE_FALSE)
-          && (b != VALUE_EMPTY_LIST)
-          && (b != VALUE_FALSE)) 
-        ? VALUE_TRUE
-        : VALUE_FALSE;
-}
-
-value builtin_not(struct allocator *alloc, value v) {
-    return ( (v != VALUE_EMPTY_LIST)
-          && (v != VALUE_FALSE) )
-        ? VALUE_FALSE
-        : VALUE_TRUE;
-}
-
 value builtin_pair(struct allocator *alloc, value v) {
     return (value_type(v) == TYPE_CONS)
         ? VALUE_TRUE
@@ -133,6 +132,10 @@ value builtin_null(struct allocator *alloc, value v) {
         : VALUE_FALSE;
 }
 
+value builtin_compile_stub(struct allocator *alloc, value v) {
+    return v;
+}
+
 struct interp_ctx* interp_new(struct allocator *alloc) {
     struct interp_ctx *ret = malloc(sizeof(struct interp_ctx));
     ret->alloc = alloc;
@@ -147,11 +150,10 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "car"), make_builtin1(ret->alloc, &builtin_car));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "cdr"), make_builtin1(ret->alloc, &builtin_cdr));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "cons"), make_builtin2(ret->alloc, &make_cons));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "and"), make_builtin2(ret->alloc, &builtin_and));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "not"), make_builtin1(ret->alloc, &builtin_not));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "pair?"), make_builtin1(ret->alloc, &builtin_pair));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "eq?"), make_builtin2(ret->alloc, &builtin_eq));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "null?"), make_builtin1(ret->alloc, &builtin_null));
+
 
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
@@ -159,7 +161,9 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "begin"), VALUE_SP_BEGIN);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "quote"), VALUE_SP_QUOTE);
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "let"), VALUE_SP_LET);
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "apply"), VALUE_SP_APPLY);
 
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "_compile"), make_builtin1(ret->alloc, &builtin_compile_stub));
     return ret;
 }
 
@@ -170,7 +174,7 @@ void interp_free(struct interp_ctx *i) {
 
 int interp_collect_list(value expr, int count, value *collector) {
     assert(collector != NULL);
-    assert(count > 0);
+    assert(count >= 0);
     int pos = 0;
     value ca = expr;
     while (value_type(ca) == TYPE_CONS) {
@@ -225,22 +229,34 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     value_type(pos_args[0]));
                 return VALUE_NIL;
             }
-            i->env = env_bind(i->alloc, i->env, pos_args[0], interp_eval(i, pos_args[1]));
-            // XXX or what does it return
+            i->env = env_bind(i->alloc, i->env, pos_args[0], VALUE_NIL);
+            i->env->value = interp_eval(i, pos_args[1]);
+            // XXX or what does it return?
             return VALUE_NIL;
             break;
-        case VALUE_SP_LAMBDA:
+        case VALUE_SP_LAMBDA:;
+            // XXX in case of a variadic lamda, the list may be longer. for
+            // later...
+            struct interp_lambda *lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda));
+            lambda->env = i->env;
             arg_count = interp_collect_list(args, 2, pos_args);
             if (arg_count != 2) {
                 fprintf(stderr, "Arity error in application of special 'lambda': expected 2 args but got %i\n",
                     arg_count);
                 return VALUE_NIL;
             }
-            struct interp_lambda *lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda));
-            lambda->env = i->env;
-            lambda->arity = interp_count_list(pos_args[0]);
-            lambda->arg_names = malloc(sizeof(value) * lambda->arity);
-            interp_collect_list(pos_args[0], lambda->arity, lambda->arg_names);
+            if (value_type(car(args)) == TYPE_CONS) {
+                lambda->variadic = 0;
+                lambda->arity = interp_count_list(pos_args[0]);
+                lambda->arg_names = malloc(sizeof(value) * lambda->arity);
+                interp_collect_list(pos_args[0], lambda->arity, lambda->arg_names);
+            }
+            else {
+                lambda->variadic = 1;
+                lambda->arity = 1; // XXX for now, see above
+                lambda->arg_names = malloc(sizeof(value) * lambda->arity);
+                lambda->arg_names[0] = car(args);
+            }
             lambda->body = pos_args[1];
             return make_interp_lambda(lambda);
             break;
@@ -291,6 +307,16 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
             value result = interp_eval(i, pos_args[1]);
             i->env = old_env;
             return result;
+            break;
+        case VALUE_SP_APPLY:
+            arg_count = interp_collect_list(args, 2, pos_args);
+            if (arg_count != 2) {
+                fprintf(stderr, "Arity error in application of special 'apply': expected 2 args but got %i\n",
+                    arg_count);
+                return VALUE_NIL;
+            }
+            return interp_eval(i, make_cons(i->alloc, pos_args[0], 
+                                                      interp_eval(i, pos_args[1])));
             break;
         default:
             fprintf(stderr, "Unknown special 0x%lX\n", special);
@@ -346,17 +372,38 @@ value interp_eval(struct interp_ctx *i, value expr) {
             else if (value_type(op) == TYPE_INTERP_LAMBDA) {
                 struct interp_lambda *lambda = value_to_interp_lambda(op);
                 int application_arity = interp_count_list(cdr(expr));
-                if (lambda->arity != application_arity) {
-                    fprintf(stderr, "Arity error in application of lambda: expected %i args but got %i\n",
-                        lambda->arity, application_arity);
-                    return VALUE_NIL;
-                }
                 struct interp_env *application_env = lambda->env;
-                value current_arg = cdr(expr);
-                for (int idx = 0; idx < application_arity; idx++) {
-                    application_env = env_bind(i->alloc, application_env, lambda->arg_names[idx], 
-                        interp_eval(i, car(current_arg)));
-                    current_arg = cdr(current_arg);
+                if (lambda->variadic) {
+                    value arg_list = VALUE_EMPTY_LIST;
+                    value out_ca = VALUE_NIL;
+                    value current_arg = cdr(expr);
+                    for (int idx = 0; idx < application_arity; idx++) {
+                        value temp = make_cons(i->alloc, interp_eval(i, car(current_arg)), VALUE_EMPTY_LIST);
+                        current_arg = cdr(current_arg);
+                        if (arg_list == VALUE_EMPTY_LIST) {
+                            arg_list = temp;
+                            out_ca = temp;
+                        }
+                        else {
+                            set_cdr(out_ca, temp);
+                            out_ca = temp;
+                        }
+                    }
+                    application_env = env_bind(i->alloc, application_env, lambda->arg_names[0], 
+                        arg_list);
+                }
+                else {
+                    if (lambda->arity != application_arity) {
+                        fprintf(stderr, "Arity error in application of lambda: expected %i args but got %i\n",
+                            lambda->arity, application_arity);
+                        return VALUE_NIL;
+                    }
+                    value current_arg = cdr(expr);
+                    for (int idx = 0; idx < application_arity; idx++) {
+                        application_env = env_bind(i->alloc, application_env, lambda->arg_names[idx], 
+                            interp_eval(i, car(current_arg)));
+                        current_arg = cdr(current_arg);
+                    }
                 }
                 struct interp_env *previous_env = i->env;
                 i->env = application_env;
