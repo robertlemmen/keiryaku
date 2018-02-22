@@ -1,31 +1,73 @@
-; this is silly of course, but shows that the compilation tower somewhat works
-;(define _compile
-;    (lambda (ex)
-;        (cons '+ (cons 1 (cons ex '())))))
+; some base environment, should probably be separate from compiler
+(define list
+    (lambda args
+        args))
+
+(define caar
+    (lambda (arg)
+        (car (car arg))))
+
+(define cadr
+    (lambda (arg)
+        (car (cdr arg))))
+
+(define cdar
+    (lambda (arg)
+        (cdr (car arg))))
+
+(define cddr
+    (lambda (arg)
+        (cdr (cdr arg))))
+
+(define caaar
+    (lambda (arg)
+        (car (car (car arg)))))
+
+(define caadr
+    (lambda (arg)
+        (car (car (cdr arg)))))
+
+(define cadar
+    (lambda (arg)
+        (car (cdr (car arg)))))
+
+(define caddr
+    (lambda (arg)
+        (car (cdr (cdr arg)))))
+
+(define cdaar
+    (lambda (arg)
+        (cdr (car (car arg)))))
+
+(define cdadr
+    (lambda (arg)
+        (cdr (car (cdr arg)))))
+
+(define cddar
+    (lambda (arg)
+        (cdr (cdr (car arg)))))
+
+(define cdddr
+    (lambda (arg)
+        (cdr (cdr (cdr arg)))))
 
 (define _compile
     (let [
         (compile-and
             (lambda (ex _compile)
-                (cons 'if 
-                    (cons (_compile (car ex)) 
-                        (cons (cons 'if 
-                            (cons (_compile (car (cdr ex))) 
-                                (cons #t 
-                                (cons #f '())))) 
-                            (cons #f '()))))))
+                (list 'if (_compile (car ex))
+                        (list 'if (_compile (cadr ex)) 
+                                #t
+                                #f)
+                        #f) ))
         (compile-or
             (lambda (ex _compile)
-                (cons 'if 
-                    (cons (_compile (car ex)) 
-                        (cons #t 
-                        (cons (cons 'if (cons (_compile (car (cdr ex))) (cons #t (cons #f '())))) '())
-                        )))))
+                (list 'if (_compile (car ex)) 
+                        #t
+                        (list 'if (_compile (cadr ex)) #t #f) )))
         (compile-not
             (lambda (ex _compile)
-                (cons 'if 
-                    (cons (_compile (car ex)) 
-                        (cons #f (cons #t '()))))))
+                (list 'if (_compile (car ex)) #f #t) ))
         ]
         (lambda (ex)
             (if (pair? ex)
