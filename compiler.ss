@@ -51,6 +51,12 @@
     (lambda (arg)
         (cdr (cdr (cdr arg)))))
 
+(define _emit-cond-case
+    (lambda (ex _compile) 
+        (if (eq? (caar ex) 'else)
+            (_compile (cadar ex))
+            (list 'if (_compile (caar ex)) (list 'begin (_compile (cadar ex))) (_emit-cond-case (cdr ex) _compile)) )))
+        
 (define _compile
     (let [
         (compile-and
@@ -68,6 +74,11 @@
         (compile-not
             (lambda (ex _compile)
                 (list 'if (_compile (car ex)) #f #t) ))
+        (compile-cond
+            (lambda (ex _compile)
+; XXX darn seems we need the recursive let version, then we can avoid the extra
+; define above
+                (_emit-cond-case ex _compile)) )
         ]
         (lambda (ex)
             (if (pair? ex)
@@ -77,7 +88,9 @@
                         (compile-or (cdr ex) _compile)
                         (if (eq? (car ex) 'not)
                             (compile-not (cdr ex) _compile)
-                            (if (eq? (car ex) 'quote)
-                                ex
-                                (cons (_compile (car ex)) (_compile (cdr ex)))))))
+                            (if (eq? (car ex) 'cond)
+                                (compile-cond (cdr ex) _compile)
+                                (if (eq? (car ex) 'quote)
+                                    ex
+                                    (cons (_compile (car ex)) (_compile (cdr ex))))))))
                 ex))))
