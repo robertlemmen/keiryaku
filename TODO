@@ -1,4 +1,3 @@
-- end-of-line token in parser
 - .+ in parser
 - freeing allocator
 - garbage collection

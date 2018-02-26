@@ -21,6 +21,7 @@ void consume_stream(struct parser *p, FILE *f) {
     while (fgets(&buffer[pos], BUFSIZE-1-pos, f)) {
         pos = parser_consume(p, buffer, isatty(fileno(f)));
     }
+    parser_eof(p);
 }
 
 void consume_file(struct parser *p, char *fname) {

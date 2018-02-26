@@ -27,6 +27,7 @@ struct parser {
 #define P_IDENT     6
 #define P_BOOL      7
 #define P_QUOTE     8
+#define P_EOF       9
 
 #define PP_CAR  0
 #define PP_MID  1
@@ -69,7 +70,7 @@ void parser_store_cell(struct parser *p, value cv) {
             p->exp_stack_top->parse_pos = PP_MID;
         }
         else {
-            printf("trying to store after end of cons cell\n");
+            fprintf(stderr, "trying to store after end of cons cell\n");
         }
     }
 }
@@ -121,7 +122,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
                 free(cl);
             }
             else {
-                printf("syntax error: ')' without open s-expression\n");
+                fprintf(stderr, "syntax error: ')' without open s-expression\n");
             }
             // also reduce quote expressions on the stack
             cl = p->exp_stack_top;
@@ -155,7 +156,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
                 p->exp_stack_top->parse_pos = PP_CDR;
             }
             else {
-                printf("dot notation not supported here\n");
+                fprintf(stderr, "dot notation not supported here\n");
             }
             break;
         case P_IDENT:
@@ -186,6 +187,13 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             cl->parse_pos = PP_CAR;
             cv = make_symbol(p->alloc, "quote");
             parser_store_cell(p, cv);
+            break;
+        case P_EOF:
+            if (p->exp_stack_top) {
+                fprintf(stderr, "end-of-file but open expression\n");
+                // XXX this and other errors in parser are fatal, do something
+                // about them
+            }
             break;
         default:
             printf("?? %i\n", tok);
@@ -421,3 +429,6 @@ int parser_consume(struct parser *p, char *data, bool interactive) {
     return parser_tokenize(p, data, interactive);
 }
 
+void parser_eof(struct parser *p) {
+    parser_parse(p, P_EOF, 0, NULL, false);
+}
