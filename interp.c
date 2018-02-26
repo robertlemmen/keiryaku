@@ -13,7 +13,9 @@ struct interp_env {
 
 struct interp_ctx {
     struct allocator *alloc;
-    struct interp_env *env;
+    struct interp_env *current_env;
+    // XXX top_env could be search tree rather than linked list...
+    struct interp_env *top_env;
 };
 
 struct interp_lambda {
@@ -24,14 +26,21 @@ struct interp_lambda {
     struct interp_env *env;
 };
 
-value env_lookup(struct interp_env *env, value symbol) {
+value env_lookup(struct interp_env *current_env, struct interp_env *top_env, value symbol) {
     assert(value_type(symbol) == TYPE_SYMBOL);
-    while (env) {
-        assert(value_type(env->name) == TYPE_SYMBOL);
-        if (strcmp(value_to_symbol(env->name), value_to_symbol(symbol)) == 0) {
-            return env->value;
+    while (current_env) {
+        assert(value_type(current_env->name) == TYPE_SYMBOL);
+        if (strcmp(value_to_symbol(current_env->name), value_to_symbol(symbol)) == 0) {
+            return current_env->value;
         }
-        env = env->outer;
+        current_env = current_env->outer;
+    }
+    while (top_env) {
+        assert(value_type(top_env->name) == TYPE_SYMBOL);
+        if (strcmp(value_to_symbol(top_env->name), value_to_symbol(symbol)) == 0) {
+            return top_env->value;
+        }
+        top_env = top_env->outer;
     }
     fprintf(stderr, "Could not find symbol '%s' in environment\n", value_to_symbol(symbol));
     return VALUE_NIL;
@@ -94,6 +103,24 @@ value builtin_equals(struct allocator *alloc, value a, value b) {
     return intval(a) == intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
+value builtin_expt(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    int result = 1;
+    int base = intval(a);
+    int exp = intval(b);
+    while (exp) {
+        if (exp & 1) {
+            result *= base;
+        }
+        exp >>= 1;
+        base *= base;
+    }
+
+    return make_int(alloc, result);
+}
+
 value builtin_car(struct allocator *alloc, value v) {
     assert(value_type(v) == TYPE_CONS);
 
@@ -145,32 +172,49 @@ value builtin_compile_stub(struct allocator *alloc, value v) {
 struct interp_ctx* interp_new(struct allocator *alloc) {
     struct interp_ctx *ret = malloc(sizeof(struct interp_ctx));
     ret->alloc = alloc;
-    ret->env = NULL;
+    ret->current_env = NULL;
+    ret->top_env = NULL;
 
     // create basic environment
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "+"), make_builtin2(ret->alloc, &builtin_plus));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "-"), make_builtin2(ret->alloc, &builtin_minus));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "*"), make_builtin2(ret->alloc, &builtin_mul));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "/"), make_builtin2(ret->alloc, &builtin_div));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "="), make_builtin2(ret->alloc, &builtin_equals));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "car"), make_builtin1(ret->alloc, &builtin_car));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "cdr"), make_builtin1(ret->alloc, &builtin_cdr));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "cons"), make_builtin2(ret->alloc, &make_cons));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "pair?"), make_builtin1(ret->alloc, &builtin_pair));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "eq?"), make_builtin2(ret->alloc, &builtin_eq));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "null?"), make_builtin1(ret->alloc, &builtin_null));
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "number?"), make_builtin1(ret->alloc, &builtin_number));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "+"), 
+        make_builtin2(ret->alloc, &builtin_plus));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "-"), 
+        make_builtin2(ret->alloc, &builtin_minus));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "*"), 
+        make_builtin2(ret->alloc, &builtin_mul));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "/"), 
+        make_builtin2(ret->alloc, &builtin_div));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "="), 
+        make_builtin2(ret->alloc, &builtin_equals));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "expt"), 
+        make_builtin2(ret->alloc, &builtin_expt));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "car"), 
+        make_builtin1(ret->alloc, &builtin_car));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "cdr"), 
+        make_builtin1(ret->alloc, &builtin_cdr));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "cons"), 
+        make_builtin2(ret->alloc, &make_cons));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "pair?"), 
+        make_builtin1(ret->alloc, &builtin_pair));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eq?"), 
+        make_builtin2(ret->alloc, &builtin_eq));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "null?"), 
+        make_builtin1(ret->alloc, &builtin_null));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "number?"), 
+        make_builtin1(ret->alloc, &builtin_number));
 
 
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "lambda"), VALUE_SP_LAMBDA);
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "begin"), VALUE_SP_BEGIN);
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "quote"), VALUE_SP_QUOTE);
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "let"), VALUE_SP_LET);
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "apply"), VALUE_SP_APPLY);
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "lambda"), VALUE_SP_LAMBDA);
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "begin"), VALUE_SP_BEGIN);
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "quote"), VALUE_SP_QUOTE);
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"), VALUE_SP_LET);
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"), VALUE_SP_APPLY);
 
-    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "_compile"), make_builtin1(ret->alloc, &builtin_compile_stub));
+    ret->top_env = env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "_compile"), 
+        make_builtin1(ret->alloc, &builtin_compile_stub));
+
     return ret;
 }
 
@@ -236,8 +280,14 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     value_type(pos_args[0]));
                 return VALUE_NIL;
             }
-            i->env = env_bind(i->alloc, i->env, pos_args[0], VALUE_NIL);
-            i->env->value = interp_eval(i, pos_args[1]);
+            if (i->current_env) {
+                i->current_env = env_bind(i->alloc, i->current_env, pos_args[0], VALUE_NIL);
+                i->current_env->value = interp_eval(i, pos_args[1]);
+            }
+            else {
+                i->top_env = env_bind(i->alloc, i->top_env, pos_args[0], VALUE_NIL);
+                i->top_env->value = interp_eval(i, pos_args[1]);
+            }
             // XXX or what does it return?
             return VALUE_NIL;
             break;
@@ -245,7 +295,7 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
             // XXX in case of a variadic lamda, the list may be longer. for
             // later...
             struct interp_lambda *lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda));
-            lambda->env = i->env;
+            lambda->env = i->current_env;
             arg_count = interp_collect_list(args, 2, pos_args);
             if (arg_count != 2) {
                 fprintf(stderr, "Arity error in application of special 'lambda': expected 2 args but got %i\n",
@@ -293,7 +343,7 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     arg_count);
                 return VALUE_NIL;
             }
-            struct interp_env *old_env = i->env;
+            struct interp_env *old_env = i->current_env;
             value current_arg = pos_args[0];
             while (value_type(current_arg) == TYPE_CONS) {
                 value arg_pair = car(current_arg);
@@ -308,11 +358,11 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     return VALUE_NIL;
                 }
                 value arg_value = interp_eval(i, car(cdr(arg_pair)));
-                i->env = env_bind(i->alloc, i->env, arg_name, arg_value);
+                i->current_env = env_bind(i->alloc, i->current_env, arg_name, arg_value);
                 current_arg = cdr(current_arg);
             }
             value result = interp_eval(i, pos_args[1]);
-            i->env = old_env;
+            i->current_env = old_env;
             return result;
             break;
         case VALUE_SP_APPLY:
@@ -342,7 +392,7 @@ value interp_eval(struct interp_ctx *i, value expr) {
             break;
 
         case TYPE_SYMBOL:
-            return env_lookup(i->env, expr);
+            return env_lookup(i->current_env, i->top_env, expr);
             break;
 
         case TYPE_CONS:;
@@ -412,10 +462,10 @@ value interp_eval(struct interp_ctx *i, value expr) {
                         current_arg = cdr(current_arg);
                     }
                 }
-                struct interp_env *previous_env = i->env;
-                i->env = application_env;
+                struct interp_env *previous_env = i->current_env;
+                i->current_env = application_env;
                 value result = interp_eval(i, lambda->body);
-                i->env = previous_env;
+                i->current_env = previous_env;
                 return result;
                 return VALUE_NIL;
             }

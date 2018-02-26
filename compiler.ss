@@ -3,6 +3,16 @@
     (lambda args
         args))
 
+(define length
+    (lambda (arg)
+        (if (null? arg)
+            0
+            (+ 1 (length (cdr arg))))))
+
+(define even?
+    (lambda (arg)
+        (eq? (* (/ arg 2) 2) arg)))
+
 (define zero?
     (lambda (n)
         (eq? n 0)))
@@ -57,9 +67,19 @@
 
 (define _emit-cond-case
     (lambda (ex _compile) 
-        (if (eq? (caar ex) 'else)
-            (_compile (cadar ex))
-            (list 'if (_compile (caar ex)) (list 'begin (_compile (cadar ex))) (_emit-cond-case (cdr ex) _compile)) )))
+        (if (null? ex)
+            '()
+            (if (eq? (caar ex) 'else)
+                (_compile (cadar ex))
+                (list 'if (_compile (caar ex)) (list 'begin (_compile (cadar ex))) (_emit-cond-case (cdr ex) _compile)) ))))
+
+(define sub1
+    (lambda (n)
+        (- n 1)))
+
+(define add1
+    (lambda (n)
+        (+ n 1)))
         
 (define _compile
     (let [

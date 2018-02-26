@@ -75,8 +75,8 @@ void parser_store_cell(struct parser *p, value cv) {
 }
 
 
-void parser_parse(struct parser *p, int tok, int num, char *str) {\
-    value cv = VALUE_NIL;\
+void parser_parse(struct parser *p, int tok, int num, char *str, bool interactive) {
+    value cv = VALUE_NIL;
     struct expr_lnk *cl;
     switch (tok) {
         case P_LBRACKET:
@@ -136,6 +136,15 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
         case P_NUMBER:
             cv = make_int(p->alloc, num);
             parser_store_cell(p, cv);
+            // also reduce quote expressions on the stack
+            cl = p->exp_stack_top;
+            while (cl && cl->quote) {
+                cv = cl->content;
+                struct expr_lnk *tmp = cl;
+                cl = cl->outer;
+                free(tmp);
+            }
+            p->exp_stack_top = cl;
             break;
         case P_BOOL:
             cv = num ? VALUE_TRUE : VALUE_FALSE;
@@ -204,8 +213,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
             dump_value(result);
             printf("\n");
         }
-        
-        if (isatty(fileno(stdin))) {
+        if (interactive) {
             printf("> ");
         }
     }
@@ -223,7 +231,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
 // parens easier...
 // XXX we should be able to treat things as ".+" as identifiers, see
 // 15-little-shadows.t
-int parser_tokenize(struct parser *p, char *data) {
+int parser_tokenize(struct parser *p, char *data, bool interactive) {
     char *cp = data;
     char *mark = NULL;
     if ((p->tokenizer_state == S_IDENT) || (p->tokenizer_state == S_NUMBER)) {
@@ -236,19 +244,19 @@ int parser_tokenize(struct parser *p, char *data) {
                 // ignore whitespace
             }
             else if (*cp == '(') {
-                parser_parse(p, P_LPAREN, 0, NULL);
+                parser_parse(p, P_LPAREN, 0, NULL, interactive);
             }
             else if (*cp == ')') {
-                parser_parse(p, P_RPAREN, 0, NULL);
+                parser_parse(p, P_RPAREN, 0, NULL, interactive);
             }
             else if (*cp == '[') {
-                parser_parse(p, P_LBRACKET, 0, NULL);
+                parser_parse(p, P_LBRACKET, 0, NULL, interactive);
             }
             else if (*cp == ']') {
-                parser_parse(p, P_RBRACKET, 0, NULL);
+                parser_parse(p, P_RBRACKET, 0, NULL, interactive);
             }
             else if (*cp == '\'') {
-                parser_parse(p, P_QUOTE, 0, NULL);
+                parser_parse(p, P_QUOTE, 0, NULL, interactive);
             }
             else if (*cp == ';') {
                 p->tokenizer_state = S_COMMENT;
@@ -257,7 +265,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 p->tokenizer_state = S_HASH;
             }
             else if (*cp == '.') {
-                parser_parse(p, P_DOT, 0, NULL);
+                parser_parse(p, P_DOT, 0, NULL, interactive);
             }
             else if ((*cp >= '0') && (*cp <= '9')) {
                 mark = cp;
@@ -292,23 +300,30 @@ int parser_tokenize(struct parser *p, char *data) {
             if ((*cp >= '0') && (*cp <= '9')) {
                 // still in number
             }
+            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
+                || ((*cp >= 'a') && (*cp <= 'z')) 
+                || ((*cp >= '0') && (*cp <= '9')) 
+                || ((*cp >= 'A') && (*cp <= 'Z')) 
+                || (strchr("+-.@", *cp) != NULL) ) {
+                p->tokenizer_state = S_IDENT;
+            }
             else {
                 // end of number
                 p->tokenizer_state = S_INIT;
                 char *ep = cp-1;
                 int num_literal = strtol(mark, &ep, 10);
-                parser_parse(p, P_NUMBER, num_literal, NULL);
+                parser_parse(p, P_NUMBER, num_literal, NULL, interactive);
                 cp--;
                 mark = NULL;
             }
         }
         else if (p->tokenizer_state == S_HASH) {
             if (*cp == 't') {
-                parser_parse(p, P_BOOL, 1, NULL);
+                parser_parse(p, P_BOOL, 1, NULL, interactive);
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == 'f') {
-                parser_parse(p, P_BOOL, 0, NULL);
+                parser_parse(p, P_BOOL, 0, NULL, interactive);
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == '!') {
@@ -340,7 +355,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 char *str = malloc(cp - mark + 1);
                 strncpy(str, mark, cp - mark);
                 str[cp - mark] = '\0';
-                parser_parse(p, P_IDENT, 0, str);
+                parser_parse(p, P_IDENT, 0, str, interactive);
                 free(str);
                 cp--;
                 mark = NULL;
@@ -365,7 +380,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 char *str = malloc(cp - mark + 1);
                 strncpy(str, mark, cp - mark);
                 str[cp - mark] = '\0';
-                parser_parse(p, P_IDENT, 0, str);
+                parser_parse(p, P_IDENT, 0, str, interactive);
                 free(str);
                 cp--;
                 mark = NULL;
@@ -399,10 +414,10 @@ void parser_free(struct parser *p) {
     free(p);
 }
 
-int parser_consume(struct parser *p, char *data) {
+int parser_consume(struct parser *p, char *data, bool interactive) {
     assert(p != NULL);
     assert(data != NULL);
     
-    return parser_tokenize(p, data);
+    return parser_tokenize(p, data, interactive);
 }
 
