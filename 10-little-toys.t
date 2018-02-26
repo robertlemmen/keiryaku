@@ -40,7 +40,7 @@
 (null? '(a b c))    ; false
 (define atom?
  (lambda (x)
-    (and (not (pair? x)) (not (null? x)))))  
+    (and (not (pair? x)) (not (null? x)))))
 (atom? 'Harry)                          ; true
 (atom? '(Harry had a heap of apples))   ; false
 (atom? (car '(Harry had a heap of apples)))         ; true

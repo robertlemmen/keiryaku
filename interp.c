@@ -132,6 +132,12 @@ value builtin_null(struct allocator *alloc, value v) {
         : VALUE_FALSE;
 }
 
+value builtin_number(struct allocator *alloc, value v) {
+    return (value_type(v) == TYPE_INT)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
 value builtin_compile_stub(struct allocator *alloc, value v) {
     return v;
 }
@@ -153,6 +159,7 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "pair?"), make_builtin1(ret->alloc, &builtin_pair));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "eq?"), make_builtin2(ret->alloc, &builtin_eq));
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "null?"), make_builtin1(ret->alloc, &builtin_null));
+    ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "number?"), make_builtin1(ret->alloc, &builtin_number));
 
 
     ret->env = env_bind(alloc, ret->env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);

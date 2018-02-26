@@ -76,7 +76,6 @@ void parser_store_cell(struct parser *p, value cv) {
 
 
 void parser_parse(struct parser *p, int tok, int num, char *str) {\
-    /* XXX copy and adapt from isis */
     value cv = VALUE_NIL;\
     struct expr_lnk *cl;
     switch (tok) {
@@ -200,8 +199,11 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
 //        printf("\n");
         // we now have something potentially executable, so evaluate it
 //        printf("// result: ");
-        dump_value(interp_eval(p->interp, cv));
-        printf("\n");
+        value result = interp_eval(p->interp, cv);
+        if (result != VALUE_NIL) {
+            dump_value(result);
+            printf("\n");
+        }
         
         if (isatty(fileno(stdin))) {
             printf("> ");
@@ -219,6 +221,8 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {\
 
 // XXX and EOF token would be interesting, would mean we can detect mismatched
 // parens easier...
+// XXX we should be able to treat things as ".+" as identifiers, see
+// 15-little-shadows.t
 int parser_tokenize(struct parser *p, char *data) {
     char *cp = data;
     char *mark = NULL;
@@ -228,8 +232,7 @@ int parser_tokenize(struct parser *p, char *data) {
     // read the data char-by-char
     while (*cp != '\0') {
         if (p->tokenizer_state == S_INIT) {
-            // XXX we should also tolerate dos files, needs test too
-            if ((*cp == ' ') || (*cp == '\t') || (*cp == '\n')) {
+            if ((*cp == ' ') || (*cp == '\t') || (*cp == '\r') || (*cp == '\n')) {
                 // ignore whitespace
             }
             else if (*cp == '(') {

@@ -3,6 +3,10 @@
     (lambda args
         args))
 
+(define zero?
+    (lambda (n)
+        (eq? n 0)))
+
 (define caar
     (lambda (arg)
         (car (car arg))))

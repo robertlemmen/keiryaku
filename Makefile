@@ -35,21 +35,29 @@ version.o: version.c
 
 test: $(TARGET)
 	@echo "Running Tests..."
-	@for tf in *.t; do \
+	@failed_count=0; \
+	for tf in *.t; do \
 		[ -e "$$tf" ] || continue; \
 		echo "  $$tf ..."; \
 		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) > /tmp/result; \
 		cat $$tf | grep -v "^;" | sed '1,/===/d' > /tmp/expected; \
 		diff -uB /tmp/expected /tmp/result > /tmp/diff || true; \
 		if [ -s /tmp/diff ]; then \
+			echo; \
 			echo "difference in test $$tf:"; \
 			cat /tmp/diff; \
+			echo; \
 			rm -f /tmp/expected /tmp/result /tmp/diff; \
-			exit 1; \
+			failed_count=`expr $$failed_count + 1`; \
 		fi; \
-	done;
-	@rm -f /tmp/expected /tmp/result /tmp/diff
-	@echo "all ok!"
+	done; \
+	if [ $$failed_count -gt 0 ]; then \
+		echo; \
+		echo "$$failed_count tests failed!"; \
+		exit 1; \
+	fi; \
+	echo; \
+	echo "all ok!"
 
 clean:
 	@echo "Cleaning..."
