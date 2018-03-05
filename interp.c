@@ -481,3 +481,31 @@ value interp_eval(struct interp_ctx *i, value expr) {
 
     return expr;
 }
+
+void interp_add_gc_roots(struct allocator_gc_ctx *gc, struct interp_env *env) {
+    while (env) {
+        allocator_gc_add_root(gc, env->name);
+        allocator_gc_add_root(gc, env->value);
+        env = env->outer;
+    }
+}
+
+void interp_gc(struct interp_ctx *i) {
+    struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
+    interp_add_gc_roots(gc, i->current_env);
+    interp_add_gc_roots(gc, i->top_env);
+    allocator_gc_perform(gc);
+}
+
+void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
+    allocator_gc_add_root(gc, l->body);
+    for (int i = 0; i < l->arity; i++) {
+        allocator_gc_add_root(gc, l->arg_names[i]);
+    }
+    struct interp_env *ce = l->env;
+    while (ce) {
+        allocator_gc_add_root(gc, ce->name);
+        allocator_gc_add_root(gc, ce->value);
+        ce = ce->outer;
+    }
+}

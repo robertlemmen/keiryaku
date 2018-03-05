@@ -5,47 +5,55 @@
 
 /* Heap Organization
  *
- * data on the heap is stored as "cells", where each cell needs to hold the data in 
- * question, but also track the type and hold garbage collector state. cells are a 
- * multiple of 16bytes and are aligned to 16byte-boundaries as well. 
+ * This is largely a simplified version of http://wiki.luajit.org/New-Garbage-Collector
  *
- * we would like to keep typical cells (e.g. cons) small, simple and aligned, so we 
- * use larger blocks of memory to hold the cells and organise it so that the extra
- * byte of object metadata can be computed from the address: each block has a fixed 
- * size and is aligned so that the start address only has zeroes in the corresponding 
- * number of lower order bits. e.g a 1MB page could start at address 0xDEADBEEF12300000.
- * there can be up to 65536 cells of 16bytes in this, so we reserve the first 64k of 
- * the block for metadata. this way each cell has a byte of metadata, whose address
- * can be easily computed: 
- *   cell_addr & 0xFFFFFFFFFFF00000 is the start of the block
- *   (cell_addr & 0x00000000000FFFFF >> 8) is the index of the cell into the block
- *   adding these two gives the address of the metadata byte
+ * Data on the heap is stored as "cells", with each cell holding 16bytes. One or more
+ * consecutive cells make up an allocaoted memory block. Blocks are allocated
+ * from arenas of 1MB size, which hold some metadata at the beginning of each
+ * Arena. Arenas are aligned to their size, so the arena start and therefore the
+ * metadata block can easily be computed by masking the cell address. The index
+ * of a cell within an arena always fits in 16bits and can also be computed
+ * easily by masking and shifting. 
  *
- * XXX what to store in metadata? depends on GC design, but we need size for
- * variable blobs...
+ * The metadata block is 16kB in size, which means that the first 1024 cell
+ * indices are never used. It holds two bitmaps: "block" and "mark", each with
+ * one bit per cell. Since the first 1024 cells indices are actually metadata,
+ * the first 1024 bits of each bitmap are also not used for actual cells and are
+ * used for other purposes (see below).
  *
- * Note that the first 64kB of the block are not used by cells, consequently the first
- * 4096 metadata bytes are not used either, these can be used to store other 
- * information, e.g. allocator data.
+ * The two bits for each cell have the following meaning:
  *
- * We should have buckets of blocks for allocations of common fixed sizes, e.g.
- * 16 bytes like cons cells. these could then just be a bump allocator + free
- * list!
+ * block  mark  
+ *     0     0  block extent, for blocks larger than one cell
+ *     0     1  free cell
+ *     1     0  allocated, white block
+ *     1     1  allocated, black block
+ *
+ * When allocating memory we simply scan the two bitmaps until we find a free
+ * cell. we cache the first free cell in the metadata, and reset it on garbage
+ * collection. Once we have found a freee cell, we need to check that we have
+ * enough consecutive free cells for our allocation. Once we found a freee
+ * block, it is marked as allocated, white and the extents are set accordingly.
+ *
+ * When doing garbage collection, we trace through root objects and mark all
+ * reachable objects black. The list of objects that still need to be traced is
+ * per arena and linked from the metadata. By traversing objects from the list
+ * of the current arena first, we switch less between arenas and therefore cause
+ * less cache pollution. 
+ *
+ * Once we have marked all reachable objects, we can go through the metadata of
+ * all arenas and turn all white blocks into free ones, and then turn all black
+ * blocks white again.
  * */
 
-#define BLOCK_SIZE 0x100000
-#define cell_to_block(x) ((uint64_t)x & 0xFFFFFFFFFFF00000)
-#define cell_index(x) (((uint64_t)x & 0x00000000000FFFFF) >> 8)
-#define cell_to_cell_meta(x) (cell_to_block(x) + cell_index(x))
-
-typedef void* block;
+typedef void* arena;
 typedef void* cell;
-typedef uint8_t cell_meta;
+typedef void* block;
 
-block alloc_block(void);
+arena alloc_arena(void);
+void free_arena(arena a);
+block alloc_block(arena a, int s);
 void free_block(block b);
-cell alloc_cell(block b, int s); // s is size required
-void free_cell(cell c);
 
 struct allocator;
 
@@ -53,5 +61,13 @@ struct allocator* allocator_new(void);
 void allocator_free(struct allocator *a);
 
 cell allocator_alloc(struct allocator *a, int s);
+
+struct allocator_gc_ctx;
+
+struct allocator_gc_ctx* allocator_gc_new(struct allocator *a);
+// XXX ugly! why do we have a cycle between this and types.h? eprhaps gc needs
+// to be in own file?
+void allocator_gc_add_root(struct allocator_gc_ctx *gc, uint64_t v);
+void allocator_gc_perform(struct allocator_gc_ctx *gc);
 
 #endif /* HEAP_H */

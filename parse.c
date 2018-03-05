@@ -222,6 +222,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             printf("\n");
         }
         if (interactive) {
+            interp_gc(p->interp);
             printf("> ");
         }
     }
@@ -431,4 +432,8 @@ int parser_consume(struct parser *p, char *data, bool interactive) {
 
 void parser_eof(struct parser *p) {
     parser_parse(p, P_EOF, 0, NULL, false);
+    // XXX for now we run a GC cycle after each file, which of course won't work
+    // for long-running programs. if we run GC from interp_eval, we need to add
+    // values on the stack to the gc roots as well...
+    interp_gc(p->interp);
 }

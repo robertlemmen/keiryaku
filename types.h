@@ -63,9 +63,9 @@
 
 typedef uint64_t value;
 
-#define value_is_immediate(x) ((x) & 1)
+#define value_is_immediate(x) (((x) & 1))
 #define value_type(x) ((x) & 15)
-#define value_to_cell(x) ((x) & ~15)
+#define value_to_cell(x) (void*)((x) & ~15) // XXX should be called block?
 
 #define TYPE_INT              0b0001
 #define TYPE_FLOAT            0b0011
