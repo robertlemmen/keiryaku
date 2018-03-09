@@ -20,6 +20,7 @@
  *   000 - integer
  *   001 - float 
  *   010 - enumerated. 
+ *   011 - short symbol
  *
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
@@ -53,8 +54,6 @@
  *   100 - interpreter lambda
  *
  * XXX will need boxes
- *
- * XXX immediate short string optimisation
  *  */
 
 #if __SIZEOF_POINTER__ != 8
@@ -70,6 +69,7 @@ typedef uint64_t value;
 #define TYPE_INT              0b0001
 #define TYPE_FLOAT            0b0011
 #define TYPE_ENUM             0b0101
+#define TYPE_SHORT_SYMBOL     0b0111
 
 #define TYPE_SYMBOL           0b0000
 #define TYPE_CONS             0b0010
@@ -91,6 +91,9 @@ typedef uint64_t value;
 #define VALUE_SP_APPLY    0b11100101
 
 #define value_is_special(x) (((x) & 0b10001111) == 0b10000101)
+
+/* symbols can be immediate/short or non-immediate */
+#define value_is_symbol(x) ((value_type(x) == TYPE_SHORT_SYMBOL) || (value_type(x) == TYPE_SYMBOL))
 
 /* values are considered true if they are not #f or an empty list */
 #define value_is_true(x) (((x) & 0b11101111) != 0b00100101)
@@ -124,9 +127,11 @@ value make_cons(struct allocator *a, value car, value cdr);
  *
  * Symbols are represented on the heap as a null-terminated string
  * */
-
 value make_symbol(struct allocator *a, char *s);
-#define value_to_symbol(x) ((char*)value_to_cell(x))
+/* weirdly we need to pass this by address due to the short string optimization.
+ * also means that the caller has to be very careful as the value returned from
+ * this does not outlive the value passed in! */
+char* value_to_symbol(value *s);
 
 /* Builtins
  * */

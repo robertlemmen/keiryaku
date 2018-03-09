@@ -13,9 +13,33 @@ value make_cons(struct allocator *a, value car, value cdr) {
 }
 
 value make_symbol(struct allocator *a, char *s) {
-    char *sp = allocator_alloc(a, strlen(s) + 1);
-    strcpy(sp, s);
-    return (uint64_t)sp | TYPE_SYMBOL;
+    if (strlen(s) < 7) {
+        value ret = 0;
+        char *sr = (char*)&ret;
+        // XXX this is highly dependent on endianness
+        memcpy(&sr[1], s, strlen(s));
+        ret |= (strlen(s) << 4) | TYPE_SHORT_SYMBOL;
+        return ret;
+    }
+    else {
+        char *sp = allocator_alloc(a, strlen(s) + 1);
+        strcpy(sp, s);
+        return (uint64_t)sp | TYPE_SYMBOL;
+    }
+}
+
+char* value_to_symbol(value *s) {
+    assert(value_is_symbol(*s));
+    if (value_type(*s) == TYPE_SYMBOL) {
+        return ((char*)value_to_cell(*s));
+    }
+    else if (value_type(*s) == TYPE_SHORT_SYMBOL) {
+        char *sr = (char*)s;
+        return (char*)&sr[1];
+    }
+    else {
+        return NULL;
+    }
 }
 
 void dump_value(value v) {
@@ -46,7 +70,8 @@ void dump_value(value v) {
             }
             break;
         case TYPE_SYMBOL:
-            printf("%s", value_to_symbol(v));
+        case TYPE_SHORT_SYMBOL:
+            printf("%s", value_to_symbol(&v));
             break;
         case TYPE_CONS:
             printf("(");

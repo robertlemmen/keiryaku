@@ -193,7 +193,7 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, value v) {
 }
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
-    printf("# Doing GC!\n");
+//    printf("# Doing GC!\n");
 
     int roots = gc->list->count;
     int visited = 0;
@@ -236,7 +236,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         }
     }
 
-    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
+//    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
 
 //    free(gc);
 }

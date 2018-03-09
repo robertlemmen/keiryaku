@@ -27,27 +27,27 @@ struct interp_lambda {
 };
 
 value env_lookup(struct interp_env *current_env, struct interp_env *top_env, value symbol) {
-    assert(value_type(symbol) == TYPE_SYMBOL);
+    assert(value_is_symbol(symbol));
     while (current_env) {
-        assert(value_type(current_env->name) == TYPE_SYMBOL);
-        if (strcmp(value_to_symbol(current_env->name), value_to_symbol(symbol)) == 0) {
+        assert(value_is_symbol(current_env->name));
+        if (strcmp(value_to_symbol(&current_env->name), value_to_symbol(&symbol)) == 0) {
             return current_env->value;
         }
         current_env = current_env->outer;
     }
     while (top_env) {
-        assert(value_type(top_env->name) == TYPE_SYMBOL);
-        if (strcmp(value_to_symbol(top_env->name), value_to_symbol(symbol)) == 0) {
+        assert(value_is_symbol(top_env->name));
+        if (strcmp(value_to_symbol(&top_env->name), value_to_symbol(&symbol)) == 0) {
             return top_env->value;
         }
         top_env = top_env->outer;
     }
-    fprintf(stderr, "Could not find symbol '%s' in environment\n", value_to_symbol(symbol));
+    fprintf(stderr, "Could not find symbol '%s' in environment\n", value_to_symbol(&symbol));
     return VALUE_NIL;
 }
 
 struct interp_env* env_bind(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
-    assert(value_type(symbol) == TYPE_SYMBOL);
+    assert(value_is_symbol(symbol));
     struct interp_env *ret = allocator_alloc(alloc, (sizeof(struct interp_env)));
     ret->outer = env;
     ret->name = symbol;
@@ -56,10 +56,10 @@ struct interp_env* env_bind(struct allocator *alloc, struct interp_env *env, val
 }
 
 struct interp_env* env_rebind(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
-    assert(value_type(symbol) == TYPE_SYMBOL);
+    assert(value_is_symbol(symbol));
     struct interp_env *ce = env;
     while (ce) {
-        if (strcmp(value_to_symbol(symbol), value_to_symbol(ce->name)) == 0) {
+        if (strcmp(value_to_symbol(&symbol), value_to_symbol(&ce->name)) == 0) {
             ce->value = value;
             return env;
         }
@@ -143,8 +143,8 @@ value builtin_eq(struct allocator *alloc, value a, value b) {
     if (a == b) {
         return VALUE_TRUE;
     }
-    if ((value_type(a) == TYPE_SYMBOL) && (value_type(b) == TYPE_SYMBOL)) {
-        if (strcmp(value_to_symbol(a), value_to_symbol(b)) == 0) {
+    if (value_is_symbol(a) && value_is_symbol(b)) {
+        if (strcmp(value_to_symbol(&a), value_to_symbol(&b)) == 0) {
             return VALUE_TRUE;
         }
     }
@@ -273,7 +273,7 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                 return VALUE_NIL;
             }
             // XXX do we need to eval it first?
-            if (value_type(pos_args[0]) != TYPE_SYMBOL) {
+            if (!value_is_symbol(pos_args[0])) {
                 fprintf(stderr, "Type error in application of special 'define': expected a symbol args but got %li\n",
                     // XXX we should have a textual type, just for error
                     // repoting and logging
@@ -353,7 +353,7 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                 }
                 // XXX is there not a way this can be evaled?
                 value arg_name = car(arg_pair);
-                if (value_type(arg_name) != TYPE_SYMBOL) {
+                if (!value_is_symbol(arg_name)) {
                     fprintf(stderr, "first part of arg binding to let is not a symbol\n");
                     return VALUE_NIL;
                 }
@@ -391,6 +391,7 @@ value interp_eval(struct interp_ctx *i, value expr) {
             return expr;
             break;
 
+        case TYPE_SHORT_SYMBOL:
         case TYPE_SYMBOL:
             return env_lookup(i->current_env, i->top_env, expr);
             break;
