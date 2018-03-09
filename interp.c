@@ -13,7 +13,7 @@ struct interp_env {
 
 struct interp_ctx {
     struct allocator *alloc;
-    struct interp_env *current_env;
+//    struct interp_env *current_env;
     // XXX top_env could be search tree rather than linked list...
     struct interp_env *top_env;
 };
@@ -26,14 +26,14 @@ struct interp_lambda {
     struct interp_env *env;
 };
 
-value env_lookup(struct interp_env *current_env, struct interp_env *top_env, value symbol) {
+value env_lookup(struct interp_env *env, struct interp_env *top_env, value symbol) {
     assert(value_is_symbol(symbol));
-    while (current_env) {
-        assert(value_is_symbol(current_env->name));
-        if (strcmp(value_to_symbol(&current_env->name), value_to_symbol(&symbol)) == 0) {
-            return current_env->value;
+    while (env) {
+        assert(value_is_symbol(env->name));
+        if (strcmp(value_to_symbol(&env->name), value_to_symbol(&symbol)) == 0) {
+            return env->value;
         }
-        current_env = current_env->outer;
+        env = env->outer;
     }
     while (top_env) {
         assert(value_is_symbol(top_env->name));
@@ -55,6 +55,7 @@ struct interp_env* env_bind(struct allocator *alloc, struct interp_env *env, val
     return ret;
 }
 
+// XXX why is this here but not used?
 struct interp_env* env_rebind(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
     assert(value_is_symbol(symbol));
     struct interp_env *ce = env;
@@ -172,7 +173,7 @@ value builtin_compile_stub(struct allocator *alloc, value v) {
 struct interp_ctx* interp_new(struct allocator *alloc) {
     struct interp_ctx *ret = malloc(sizeof(struct interp_ctx));
     ret->alloc = alloc;
-    ret->current_env = NULL;
+//    ret->current_env = NULL;
     ret->top_env = NULL;
 
     // create basic environment
@@ -247,7 +248,9 @@ int interp_count_list(value expr) {
     return ret;
 }
 
-value interp_apply_special(struct interp_ctx *i, value special, value args) {
+value interp_eval_env(struct interp_ctx *i, value expr, struct interp_env *env);
+
+value interp_apply_special(struct interp_ctx *i, value special, value args, struct interp_env *env) {
     value pos_args[3];
     int arg_count;
     switch (special) {
@@ -258,11 +261,11 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     arg_count);
                 return VALUE_NIL;
             }
-            if (value_is_true(interp_eval(i, pos_args[0]))) {
-                return interp_eval(i, pos_args[1]);
+            if (value_is_true(interp_eval_env(i, pos_args[0], env))) {
+                return interp_eval_env(i, pos_args[1], env);
             }
             else {
-                return interp_eval(i, pos_args[2]);
+                return interp_eval_env(i, pos_args[2], env);
             }
             break;
         case VALUE_SP_DEFINE:
@@ -280,14 +283,16 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     value_type(pos_args[0]));
                 return VALUE_NIL;
             }
+/* XXX this breaks the tail-call idea of passing teh env around. perhaps it's
+ * not needed anyway? 
             if (i->current_env) {
                 i->current_env = env_bind(i->alloc, i->current_env, pos_args[0], VALUE_NIL);
                 i->current_env->value = interp_eval(i, pos_args[1]);
             }
-            else {
+            else {*/
                 i->top_env = env_bind(i->alloc, i->top_env, pos_args[0], VALUE_NIL);
-                i->top_env->value = interp_eval(i, pos_args[1]);
-            }
+                i->top_env->value = interp_eval_env(i, pos_args[1], env);
+//            }
             // XXX or what does it return?
             return VALUE_NIL;
             break;
@@ -295,7 +300,7 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
             // XXX in case of a variadic lamda, the list may be longer. for
             // later...
             struct interp_lambda *lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda));
-            lambda->env = i->current_env;
+            lambda->env = env;
             arg_count = interp_collect_list(args, 2, pos_args);
             if (arg_count != 2) {
                 fprintf(stderr, "Arity error in application of special 'lambda': expected 2 args but got %i\n",
@@ -320,7 +325,7 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
         case VALUE_SP_BEGIN:;
             value cret = VALUE_NIL;
             while (value_type(args ) == TYPE_CONS) {
-                cret = interp_eval(i, car(args));
+                cret = interp_eval_env(i, car(args), env);
                 args = cdr(args);
             }
             if (args != VALUE_EMPTY_LIST) {
@@ -343,7 +348,6 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     arg_count);
                 return VALUE_NIL;
             }
-            struct interp_env *old_env = i->current_env;
             value current_arg = pos_args[0];
             while (value_type(current_arg) == TYPE_CONS) {
                 value arg_pair = car(current_arg);
@@ -357,13 +361,11 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     fprintf(stderr, "first part of arg binding to let is not a symbol\n");
                     return VALUE_NIL;
                 }
-                value arg_value = interp_eval(i, car(cdr(arg_pair)));
-                i->current_env = env_bind(i->alloc, i->current_env, arg_name, arg_value);
+                value arg_value = interp_eval_env(i, car(cdr(arg_pair)), env);
+                env = env_bind(i->alloc, env, arg_name, arg_value);
                 current_arg = cdr(current_arg);
             }
-            value result = interp_eval(i, pos_args[1]);
-            i->current_env = old_env;
-            return result;
+            return interp_eval_env(i, pos_args[1], env);
             break;
         case VALUE_SP_APPLY:
             arg_count = interp_collect_list(args, 2, pos_args);
@@ -372,8 +374,7 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
                     arg_count);
                 return VALUE_NIL;
             }
-            return interp_eval(i, make_cons(i->alloc, pos_args[0], 
-                                                      interp_eval(i, pos_args[1])));
+            return interp_eval_env(i, make_cons(i->alloc, pos_args[0], interp_eval_env(i, pos_args[1], env)), env);
             break;
         default:
             fprintf(stderr, "Unknown special 0x%lX\n", special);
@@ -381,7 +382,9 @@ value interp_apply_special(struct interp_ctx *i, value special, value args) {
     }
 }
 
-value interp_eval(struct interp_ctx *i, value expr) {
+// XXX if the current_env would not be part of i, but passed as an arg, then it
+// might be easier to do tail recursion
+value interp_eval_env(struct interp_ctx *i, value expr, struct interp_env *env) {
     assert(i != NULL);
 
     switch (value_type(expr)) {
@@ -393,17 +396,17 @@ value interp_eval(struct interp_ctx *i, value expr) {
 
         case TYPE_SHORT_SYMBOL:
         case TYPE_SYMBOL:
-            return env_lookup(i->current_env, i->top_env, expr);
+            return env_lookup(env, i->top_env, expr);
             break;
 
         case TYPE_CONS:;
-            value op = interp_eval(i, car(expr));
+            value op = interp_eval_env(i, car(expr), env);
             if (op == VALUE_NIL) {
                 // XXX is this right? what if the cdr is set?
                 return VALUE_EMPTY_LIST;
             }
             else if (value_is_special(op)) {
-                return interp_apply_special(i, op, cdr(expr));
+                return interp_apply_special(i, op, cdr(expr), env);
             }
             else if (value_type(op) == TYPE_BUILTIN1) {
                 t_builtin1 funcptr = builtin1_ptr(op);
@@ -414,7 +417,7 @@ value interp_eval(struct interp_ctx *i, value expr) {
                         arg_count);
                     return VALUE_NIL;
                 }
-                return funcptr(i->alloc, interp_eval(i, pos_args[0]));
+                return funcptr(i->alloc, interp_eval_env(i, pos_args[0], env));
             }
             else if (value_type(op) == TYPE_BUILTIN2) {
                 t_builtin2 funcptr = builtin2_ptr(op);
@@ -425,7 +428,8 @@ value interp_eval(struct interp_ctx *i, value expr) {
                         arg_count);
                     return VALUE_NIL;
                 }
-                return funcptr(i->alloc, interp_eval(i, pos_args[0]), interp_eval(i, pos_args[1]));
+                return funcptr(i->alloc, interp_eval_env(i, pos_args[0], env), 
+                                         interp_eval_env(i, pos_args[1], env));
             }
             else if (value_type(op) == TYPE_INTERP_LAMBDA) {
                 struct interp_lambda *lambda = value_to_interp_lambda(op);
@@ -436,7 +440,7 @@ value interp_eval(struct interp_ctx *i, value expr) {
                     value out_ca = VALUE_NIL;
                     value current_arg = cdr(expr);
                     for (int idx = 0; idx < application_arity; idx++) {
-                        value temp = make_cons(i->alloc, interp_eval(i, car(current_arg)), VALUE_EMPTY_LIST);
+                        value temp = make_cons(i->alloc, interp_eval_env(i, car(current_arg), env), VALUE_EMPTY_LIST);
                         current_arg = cdr(current_arg);
                         if (arg_list == VALUE_EMPTY_LIST) {
                             arg_list = temp;
@@ -459,16 +463,12 @@ value interp_eval(struct interp_ctx *i, value expr) {
                     value current_arg = cdr(expr);
                     for (int idx = 0; idx < application_arity; idx++) {
                         application_env = env_bind(i->alloc, application_env, lambda->arg_names[idx], 
-                            interp_eval(i, car(current_arg)));
+                            interp_eval_env(i, car(current_arg), env));
                         current_arg = cdr(current_arg);
                     }
                 }
-                struct interp_env *previous_env = i->current_env;
-                i->current_env = application_env;
-                value result = interp_eval(i, lambda->body);
-                i->current_env = previous_env;
-                return result;
-                return VALUE_NIL;
+                // XXX tailcall opportunity!
+                return interp_eval_env(i, lambda->body, application_env);
             }
             else {
                 fprintf(stderr, "No idea how to apply operator of type 0x%lX\n", value_type(op));
@@ -491,9 +491,15 @@ void interp_add_gc_roots(struct allocator_gc_ctx *gc, struct interp_env *env) {
     }
 }
 
+value interp_eval(struct interp_ctx *i, value expr) {
+    return interp_eval_env(i, expr, NULL);
+}
+
 void interp_gc(struct interp_ctx *i) {
     struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
-    interp_add_gc_roots(gc, i->current_env);
+    /* XXX this should always be NULL as we only GC without an ongoing eval,
+ * check! 
+    interp_add_gc_roots(gc, i->current_env);*/
     interp_add_gc_roots(gc, i->top_env);
     allocator_gc_perform(gc);
 }

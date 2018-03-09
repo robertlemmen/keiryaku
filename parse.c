@@ -75,7 +75,6 @@ void parser_store_cell(struct parser *p, value cv) {
     }
 }
 
-
 void parser_parse(struct parser *p, int tok, int num, char *str, bool interactive) {
     value cv = VALUE_NIL;
     struct expr_lnk *cl;
