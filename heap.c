@@ -158,11 +158,6 @@ cell allocator_alloc(struct allocator *a, int s) {
     return alloc_block(a->a, s);
 }
 
-struct allocator_gc_ctx {
-    struct allocator *a;
-    struct allocator_gc_list *list;
-};
-
 // XXX use posix_memalign for this, and assert it has the right size. 
 struct allocator_gc_list {
     value values[GC_LIST_SIZE];
@@ -170,12 +165,23 @@ struct allocator_gc_list {
     struct allocator_gc_list *prev;
 };
 
+struct allocator_gc_ctx {
+    struct allocator *a;
+    struct allocator_gc_list *list;
+};
+
+// XXX sometimes we use new_... and sometimes .._new!
+struct allocator_gc_list* new_gc_list(struct allocator_gc_list *prev) {
+    struct allocator_gc_list *ret =  malloc(sizeof(struct allocator_gc_list));
+    ret->count = 0;
+    ret->prev = prev;
+    return ret;
+}
+
 struct allocator_gc_ctx* allocator_gc_new(struct allocator *a) {
     struct allocator_gc_ctx *ret = malloc(sizeof(struct allocator_gc_ctx));
     ret->a = a;
-    ret->list = malloc(sizeof(struct allocator_gc_list));
-    ret->list->count = 0;
-    ret->list->prev = NULL;
+    ret->list = new_gc_list(NULL);
     return ret;
 }
 
@@ -184,18 +190,24 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, value v) {
     if (value_is_immediate(v)) {
         return;
     }
+    if (gc->list->count == GC_LIST_SIZE) {
+        gc->list = new_gc_list(gc->list);
+    }
     gc->list->values[gc->list->count] = v;
     gc->list->count++;
-    if (gc->list->count == GC_LIST_SIZE) {
-        // XXX grow it
-        fprintf(stderr, "need to grow gc root list, not implemented, will crash...\n");
-    }
+}
+
+void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m) {
+    // we mark these right away
+    uint_fast16_t cell_idx = cell_index(m);
+    arena a = gc->a->a;
+    meta_set_mark(a, cell_idx);
 }
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 //    printf("# Doing GC!\n");
 
-    int roots = gc->list->count;
+//    int roots = gc->list->count;
     int visited = 0;
     int reclaimed = 0;
 
@@ -203,7 +215,12 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 
     // mark phase
     while (gc->list->count) {
-        value cv = gc->list->values[gc->list->count--];
+        value cv = gc->list->values[--gc->list->count];
+        if ((!gc->list->count) && (gc->list->prev)) {
+            struct allocator_gc_list *temp = gc->list;
+            gc->list = temp->prev;
+            free(temp);
+        }
         // XXX not sure where we ever get a 0 value from...
         if (cv != 0 && !value_is_immediate(cv)) {
             visited++;
@@ -227,6 +244,8 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         }
     }
     // sweep
+    // XXX we could zero out all blocks that we free, so that we can detect
+    // zealous freeing by GC much easier, I suspect env blocks are a candidate
     for (int i = 1024; i < 65535; i++) {
         if (meta_get_block(a, i) && !meta_get_mark(a, i)) {
             reclaimed++;
@@ -238,5 +257,6 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 
 //    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
 
-//    free(gc);
+    free(gc->list);
+    free(gc);
 }

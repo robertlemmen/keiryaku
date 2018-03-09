@@ -68,6 +68,7 @@ struct allocator_gc_ctx* allocator_gc_new(struct allocator *a);
 // XXX ugly! why do we have a cycle between this and types.h? eprhaps gc needs
 // to be in own file?
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, uint64_t v);
+void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m);
 void allocator_gc_perform(struct allocator_gc_ctx *gc);
 
 #endif /* HEAP_H */

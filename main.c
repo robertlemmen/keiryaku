@@ -46,6 +46,11 @@ int main(int argc, char **argv) {
     consume_file(p, "compiler.ss");
     consume_stream(p, stdin);
 
+    // do a full GC, this is a bit of a waste of time and can be avoided later,
+    // but it allows us to debug memory leaks better
+    struct allocator_gc_ctx *gc = allocator_gc_new(a);
+    allocator_gc_perform(gc);
+
     parser_free(p);
     allocator_free(a);
 
