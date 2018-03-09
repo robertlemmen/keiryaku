@@ -7,10 +7,13 @@
 
 #include "types.h"
 #include "interp.h"
+#include "global.h"
 
 #define ARENA_SIZE 0x100000
 #define cell_to_arena(x) (arena)((uint64_t)x & 0xFFFFFFFFFFF00000)
 #define cell_index(x) (((uint64_t)x & 0x00000000000FFFFF) >> 4)
+#define cell_from_cell_index(a, i) (void*)((((uint64_t)a) & 0xFFFFFFFFFFF00000) \
+                                            | ((((uint64_t)i) << 4) & 0x00000000000FFFFF))
 
 #define meta_get_block(a, i)   (((uint8_t*)a)[(i) >> 3] &   (1 << (7 - ((i) & 0x07))))
 #define meta_set_block(a, i)   (((uint8_t*)a)[(i) >> 3] |=  (1 << (7 - ((i) & 0x07))))
@@ -244,14 +247,19 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         }
     }
     // sweep
-    // XXX we could zero out all blocks that we free, so that we can detect
-    // zealous freeing by GC much easier, I suspect env blocks are a candidate
     for (int i = 1024; i < 65535; i++) {
         if (meta_get_block(a, i) && !meta_get_mark(a, i)) {
             reclaimed++;
             meta_clear_block(a, i);
             meta_set_mark(a, i);
             // XXX deal with subsequent extents
+            if (arg_debug) {
+                void *cell = cell_from_cell_index(a, i);
+                assert(cell_to_arena(cell) == a);
+                assert(cell_index(cell) == i);
+                memset(cell, 0x42, 16);
+                // XXX also wipe extents
+            }
         }
     }
 

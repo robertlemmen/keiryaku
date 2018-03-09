@@ -1,4 +1,4 @@
+- support multiple arenas in heap
+- tailcall optimisation
+- gc while running eval
 - .+ in parser
-- freeing allocator
-- garbage collection
-- small string optimisation

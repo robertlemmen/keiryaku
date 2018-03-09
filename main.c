@@ -4,16 +4,34 @@
 #include <assert.h>
 #include <unistd.h>
 #include <errno.h>
+#include <getopt.h>
 
 #include "types.h"
 #include "heap.h"
 #include "eval.h"
 #include "parse.h"
 #include "version.h"
+#include "global.h"
 
 #define BUFSIZE 4096
 
 // XXX getopt for ags, e.g. not to load base env and/or compiler
+
+static struct option long_options[] = {
+    {"help", no_argument, 0, 'h'},
+    {"version", no_argument, 0, 'v'},
+    {"debug", no_argument, 0, 'd'},
+    {0, 0, 0, 0}
+};
+
+void usage(char *prog_name) {
+    fprintf(stderr, "Usage: %s [options]\n"
+        "Options:\n"
+        "  --help -h -?     print this text\n"
+        "  --version -v     print the program version\n"
+        "  --debug -d       switch on code helpful in debug environments\n\n",
+        prog_name);
+}
 
 void consume_stream(struct parser *p, FILE *f) {
     char buffer[BUFSIZE];
@@ -35,6 +53,39 @@ void consume_file(struct parser *p, char *fname) {
 }
 
 int main(int argc, char **argv) {
+    int option_index = 0;
+    int c;
+
+    while (1) {
+        c = getopt_long(argc, argv, "?hvd", long_options, &option_index);
+        if (c == -1) {
+            break;
+        }
+
+        switch(c) {
+            case 'v':
+                printf("keiryaku %s\n", software_version());
+                return 0;
+                break;
+            case 'd':
+                arg_debug = 1;
+                break;
+            case 'h':
+            case '?':
+                usage(argv[0]);
+                return 0;
+            default:
+                usage(argv[0]);
+                return 1;
+        }
+    }
+
+    if (option_index < (argc-1)) {
+        fprintf(stderr, "useless argument \"%s\"\n", argv[option_index]);
+        usage(argv[0]);
+        return 1;
+    }
+
     if (isatty(fileno(stdin))) {
         printf("-=[ keiryaku %s ]=-\n\n", software_version());
         printf("> ");
@@ -46,10 +97,11 @@ int main(int argc, char **argv) {
     consume_file(p, "compiler.ss");
     consume_stream(p, stdin);
 
-    // do a full GC, this is a bit of a waste of time and can be avoided later,
-    // but it allows us to debug memory leaks better
-    struct allocator_gc_ctx *gc = allocator_gc_new(a);
-    allocator_gc_perform(gc);
+    if (arg_debug) {
+        printf("cleaning up all remaining memory..\n");
+        struct allocator_gc_ctx *gc = allocator_gc_new(a);
+        allocator_gc_perform(gc);
+    }
 
     parser_free(p);
     allocator_free(a);

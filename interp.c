@@ -32,8 +32,6 @@ struct interp_lambda {
 };
 
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
-    // XXX since we allocate on our real heap, do we not need to traverse these
-    // as well?
     struct interp_env *ret = allocator_alloc(alloc, (sizeof(struct interp_env)));
     ret->outer = outer;
     ret->entries = NULL;
@@ -483,8 +481,10 @@ value interp_eval_env(struct interp_ctx *i, value expr, struct interp_env *env) 
 
 void interp_add_gc_roots(struct allocator_gc_ctx *gc, struct interp_env *env) {
     while (env) {
+        allocator_gc_add_nonval_root(gc, env);
         struct interp_env_entry *ee = env->entries;
         while (ee) {
+            allocator_gc_add_nonval_root(gc, ee);
             allocator_gc_add_root(gc, ee->name);
             allocator_gc_add_root(gc, ee->value);
             ee = ee->next;
@@ -499,9 +499,6 @@ value interp_eval(struct interp_ctx *i, value expr) {
 
 void interp_gc(struct interp_ctx *i) {
     struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
-    /* XXX this should always be NULL as we only GC without an ongoing eval,
- * check! 
-    interp_add_gc_roots(gc, i->current_env);*/
     interp_add_gc_roots(gc, i->top_env);
     allocator_gc_perform(gc);
 }
