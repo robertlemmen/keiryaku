@@ -1,3 +1,5 @@
+;; these are cases from "The little Schemer", taken and adapted from 
+;; https://github.com/pkrumins/the-little-schemer.
 (define add1
   (lambda (n) (+ n 1)))
 (add1 67)
