@@ -1,6 +1,5 @@
 - '#t should work in parser
 - < and >
-- vectors!
 - more work towards 20-chibi-primitives.t
 - there must be some way to re-use the env frame in a simple tail call!
 - .+ in parser

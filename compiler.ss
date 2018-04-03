@@ -1,14 +1,4 @@
-; some base environment, should probably be separate from compiler
-(define list
-    (lambda args
-        args))
-
-(define length
-    (lambda (arg)
-        (if (null? arg)
-            0
-            (+ 1 (length (cdr arg))))))
-
+; pre-compiler base env
 (define even?
     (lambda (arg)
         (eq? (* (/ arg 2) 2) arg)))
@@ -103,6 +93,11 @@
 ; XXX darn seems we need the recursive let version, then we can avoid the extra
 ; define above
                 (_emit-cond-case ex _compile)) )
+        (compile-make-vector
+            (lambda (ex _compile)
+                (if (null? (cdr ex))
+                    (cons 'make-vector (cons (car ex) (list 0)))
+                    (cons 'make-vector ex))))
         ]
         (lambda (ex)
             (if (pair? ex)
@@ -116,5 +111,36 @@
                                 (compile-cond (cdr ex) _compile)
                                 (if (eq? (car ex) 'quote)
                                     ex
-                                    (cons (_compile (car ex)) (_compile (cdr ex))))))))
+                                    (if (eq? (car ex) 'make-vector)
+                                        (compile-make-vector (cdr ex) _compile)
+                                        (cons (_compile (car ex)) (_compile (cdr ex)))))))))
                 ex))))
+
+; some base environment, should probably be separate from compiler, and should
+; use compiler
+(define list
+    (lambda args
+        args))
+
+(define length
+    (let [(length-rec (lambda vals
+            (if (pair? vals)
+                (+ 1 (apply length-rec (cdr vals)))
+                0)))]
+        (lambda (l)
+            (apply length-rec l))))
+
+(define vector
+    (let [(list-vec-copy-rec (lambda (l v i)
+        (if (pair? l)
+            (begin
+                (vector-set! v i (car l))
+                (list-vec-copy-rec (cdr l) v (+ 1 i))
+            )
+            '())))]
+    (lambda vals
+        (let [(rv (make-vector (length vals) 0))]
+            (begin
+                (list-vec-copy-rec vals rv 0)
+                rv)))))
+

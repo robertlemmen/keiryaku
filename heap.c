@@ -271,6 +271,9 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                     case TYPE_INTERP_LAMBDA:
                         interp_traverse_lambda(gc, value_to_cell(cv));
                         break;
+                    case TYPE_VECTOR:
+                        traverse_vector(gc, cv);
+                        break;
                     default:;
                         // not traversable
                 }

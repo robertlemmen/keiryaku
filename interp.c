@@ -178,6 +178,36 @@ value builtin_number(struct allocator *alloc, value v) {
         : VALUE_FALSE;
 }
 
+// XXX we need a compiler transfrom to support (make-vector 12) without "fill"
+value builtin_make_vector(struct allocator *alloc, value l, value f) {
+    assert(value_type(l) == TYPE_INT);
+    return make_vector(alloc, intval(l), f);
+}
+
+value builtin_vector(struct allocator *alloc, value v) {
+    return (value_type(v) == TYPE_VECTOR)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_vector_length(struct allocator *alloc, value v) {
+    assert(value_type(v) == TYPE_VECTOR);
+    return make_int(alloc, vector_length(v));
+}
+
+value builtin_vector_ref(struct allocator *alloc, value v, value p) {
+    assert(value_type(v) == TYPE_VECTOR);
+    assert(value_type(p) == TYPE_INT);
+    return vector_ref(v, intval(p));
+}
+
+value builtin_vector_set(struct allocator *alloc, value v, value p, value i) {
+    assert(value_type(v) == TYPE_VECTOR);
+    assert(value_type(p) == TYPE_INT);
+    vector_set(v, intval(p), i);
+    return VALUE_NIL;
+}
+
 value builtin_compile_stub(struct allocator *alloc, value v) {
     return v;
 }
@@ -201,6 +231,11 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eq?"), make_builtin2(ret->alloc, &builtin_eq));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "null?"), make_builtin1(ret->alloc, &builtin_null));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "number?"), make_builtin1(ret->alloc, &builtin_number));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "make-vector"), make_builtin2(ret->alloc, &builtin_make_vector));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector?"), make_builtin1(ret->alloc, &builtin_vector));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector-length"), make_builtin1(ret->alloc, &builtin_vector_length));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector-ref"), make_builtin2(ret->alloc, &builtin_vector_ref));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector-set!"), make_builtin3(ret->alloc, &builtin_vector_set));
 
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
@@ -438,6 +473,19 @@ tailcall_label:
                 }
                 return funcptr(i->alloc, interp_eval_env(i, pos_args[0], env), 
                                          interp_eval_env(i, pos_args[1], env));
+            }
+            else if (value_type(op) == TYPE_BUILTIN3) {
+                t_builtin3 funcptr = builtin3_ptr(op);
+                value pos_args[3];
+                int arg_count = interp_collect_list(cdr(expr), 3, pos_args);
+                if (arg_count != 3) {
+                    fprintf(stderr, "Arity error in application of builtin: expected 3 args but got %i\n",
+                        arg_count);
+                    return VALUE_NIL;
+                }
+                return funcptr(i->alloc, interp_eval_env(i, pos_args[0], env), 
+                                         interp_eval_env(i, pos_args[1], env),
+                                         interp_eval_env(i, pos_args[2], env));
             }
             else if (value_type(op) == TYPE_INTERP_LAMBDA) {
                 call_count++;

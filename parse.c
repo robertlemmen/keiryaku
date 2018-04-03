@@ -27,7 +27,8 @@ struct parser {
 #define P_IDENT     6
 #define P_BOOL      7
 #define P_QUOTE     8
-#define P_EOF       9
+#define P_VECTOR    9
+#define P_EOF       10
 
 #define PP_CAR  0
 #define PP_MID  1
@@ -149,6 +150,16 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
         case P_BOOL:
             cv = num ? VALUE_TRUE : VALUE_FALSE;
             parser_store_cell(p, cv);
+            // also reduce quote expressions on the stack
+            // XXX in three places, refactor
+            cl = p->exp_stack_top;
+            while (cl && cl->quote) {
+                cv = cl->content;
+                struct expr_lnk *tmp = cl;
+                cl = cl->outer;
+                free(tmp);
+            }
+            p->exp_stack_top = cl;
             break;
         case P_DOT:
             if (p->exp_stack_top->parse_pos != PP_CDR) {
@@ -187,6 +198,21 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             cv = make_symbol(p->alloc, "quote");
             parser_store_cell(p, cv);
             break;
+        case P_VECTOR:
+            // XXX more duplication, but subtly different. urgh
+            cv = make_cons(p->alloc, VALUE_NIL, VALUE_NIL);
+            parser_store_cell(p, cv);
+            cl = malloc(sizeof(struct expr_lnk));
+            cl->content = cv;
+            cl->implicit = 0;
+            cl->quote = 0;
+            cl->bracket = 0;
+            cl->outer = p->exp_stack_top;
+            p->exp_stack_top = cl;
+            cl->parse_pos = PP_CAR;
+            cv = make_symbol(p->alloc, "vector");
+            parser_store_cell(p, cv);
+            break;
         case P_EOF:
             if (p->exp_stack_top) {
                 fprintf(stderr, "end-of-file but open expression\n");
@@ -221,6 +247,9 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             printf("\n");
         }
         if (interactive) {
+            // XXX should not depend on interactive, but should only run when
+            // some pressure builds. except the final one in main, which should
+            // run all the time for valgrind
             interp_gc(p->interp);
             printf("> ");
         }
@@ -332,6 +361,10 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
             }
             else if (*cp == 'f') {
                 parser_parse(p, P_BOOL, 0, NULL, interactive);
+                p->tokenizer_state = S_INIT;
+            }
+            else if (*cp == '(') {
+                parser_parse(p, P_VECTOR, 0, NULL, interactive);
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == '!') {

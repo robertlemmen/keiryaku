@@ -52,6 +52,7 @@
  *                   the pointer part is the address of the function to call)
  *   011 - builtin2
  *   100 - interpreter lambda
+ *   101 - vector
  *
  * XXX will need boxes
  *  */
@@ -75,7 +76,9 @@ typedef uint64_t value;
 #define TYPE_CONS             0b0010
 #define TYPE_BUILTIN1         0b0100
 #define TYPE_BUILTIN2         0b0110
+#define TYPE_BUILTIN3         0b0111
 #define TYPE_INTERP_LAMBDA    0b1000
+#define TYPE_VECTOR           0b1010
 
 #define VALUE_NIL         0b00000101
 #define VALUE_TRUE        0b00010101
@@ -138,17 +141,29 @@ char* value_to_symbol(value *s);
 
 typedef value (*t_builtin1)(struct allocator*, value);
 typedef value (*t_builtin2)(struct allocator*, value, value);
+typedef value (*t_builtin3)(struct allocator*, value, value, value);
+
+value make_builtin1(struct allocator *a, t_builtin1 funcptr);
+t_builtin1 builtin1_ptr(value);
 
 value make_builtin2(struct allocator *a, t_builtin2 funcptr);
 t_builtin2 builtin2_ptr(value);
 
-value make_builtin1(struct allocator *a, t_builtin1 funcptr);
-t_builtin1 builtin1_ptr(value);
+value make_builtin3(struct allocator *a, t_builtin3 funcptr);
+t_builtin3 builtin3_ptr(value);
 
 /* Lambdas
  * */
 #define make_interp_lambda(x) ((uint64_t)(x) | TYPE_INTERP_LAMBDA)
 #define value_to_interp_lambda(x) ((struct interp_lambda*)value_to_cell(x))
+
+/* Vectors
+ * */
+value make_vector(struct allocator *a, int length, value fill);
+int vector_length(value v);
+value vector_ref(value v, int pos);
+void vector_set(value v, int pos, value i);
+void traverse_vector(struct allocator_gc_ctx *gc, value v);
 
 /* Input and Output
  *
