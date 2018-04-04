@@ -116,6 +116,34 @@ value builtin_equals(struct allocator *alloc, value a, value b) {
     return intval(a) == intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
+value builtin_lt(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return intval(a) < intval(b) ? VALUE_TRUE : VALUE_FALSE;
+}
+
+value builtin_gt(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return intval(a) > intval(b) ? VALUE_TRUE : VALUE_FALSE;
+}
+
+value builtin_le(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return intval(a) <= intval(b) ? VALUE_TRUE : VALUE_FALSE;
+}
+
+value builtin_ge(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return intval(a) >= intval(b) ? VALUE_TRUE : VALUE_FALSE;
+}
+
 value builtin_expt(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
@@ -223,6 +251,10 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "*"), make_builtin2(ret->alloc, &builtin_mul));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "/"), make_builtin2(ret->alloc, &builtin_div));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "="), make_builtin2(ret->alloc, &builtin_equals));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "<"), make_builtin2(ret->alloc, &builtin_lt));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, ">"), make_builtin2(ret->alloc, &builtin_gt));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "<="), make_builtin2(ret->alloc, &builtin_le));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, ">="), make_builtin2(ret->alloc, &builtin_ge));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "expt"), make_builtin2(ret->alloc, &builtin_expt));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "car"), make_builtin1(ret->alloc, &builtin_car));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "cdr"), make_builtin1(ret->alloc, &builtin_cdr));
