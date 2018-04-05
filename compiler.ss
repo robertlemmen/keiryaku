@@ -98,6 +98,11 @@
                 (if (null? (cdr ex))
                     (cons 'make-vector (cons (car ex) (list 0)))
                     (cons 'make-vector ex))))
+        (compile-let
+            (lambda (ex _compile)
+                (if (null? (cddr ex))
+                    (cons 'let ex)
+                    (list 'let (car ex) (cons 'begin (cdr ex))))))
         ]
         (lambda (ex)
             (if (pair? ex)
@@ -109,11 +114,13 @@
                             (compile-not (cdr ex) _compile)
                             (if (eq? (car ex) 'cond)
                                 (compile-cond (cdr ex) _compile)
-                                (if (eq? (car ex) 'quote)
-                                    ex
-                                    (if (eq? (car ex) 'make-vector)
-                                        (compile-make-vector (cdr ex) _compile)
-                                        (cons (_compile (car ex)) (_compile (cdr ex)))))))))
+                                (if (eq? (car ex) 'let)
+                                    (compile-let (cdr ex) _compile)
+                                    (if (eq? (car ex) 'quote)
+                                        ex
+                                        (if (eq? (car ex) 'make-vector)
+                                            (compile-make-vector (cdr ex) _compile)
+                                            (cons (_compile (car ex)) (_compile (cdr ex))))))))))
                 ex))))
 
 ; some base environment, should probably be separate from compiler, and should
