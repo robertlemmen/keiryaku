@@ -2,5 +2,4 @@
 - more work towards 20-chibi-primitives.t, needs compiler support for three-arg
   (let ...)
 - there must be some way to re-use the env frame in a simple tail call!
-- .+ in parser
 - gc while running eval

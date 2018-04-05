@@ -251,7 +251,6 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             // some pressure builds. except the final one in main, which should
             // run all the time for valgrind
             interp_gc(p->interp);
-            printf("> ");
         }
     }
 }

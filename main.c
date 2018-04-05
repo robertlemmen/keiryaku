@@ -5,7 +5,9 @@
 #include <unistd.h>
 #include <errno.h>
 #include <getopt.h>
+#include <pwd.h>
 
+#include "linenoise/linenoise.h"
 #include "types.h"
 #include "heap.h"
 #include "eval.h"
@@ -37,7 +39,7 @@ void consume_stream(struct parser *p, FILE *f) {
     char buffer[BUFSIZE];
     int pos = 0;
     while (fgets(&buffer[pos], BUFSIZE-1-pos, f)) {
-        pos = parser_consume(p, buffer, isatty(fileno(f)));
+        pos = parser_consume(p, buffer, false);
     }
     parser_eof(p);
 }
@@ -55,6 +57,8 @@ void consume_file(struct parser *p, char *fname) {
 int main(int argc, char **argv) {
     int option_index = 0;
     int c;
+
+    char *history_file = NULL;
 
     while (1) {
         c = getopt_long(argc, argv, "?hvd", long_options, &option_index);
@@ -88,14 +92,33 @@ int main(int argc, char **argv) {
 
     if (isatty(fileno(stdin))) {
         printf("-=[ keiryaku %s ]=-\n\n", software_version());
-        printf("> ");
+        linenoiseSetMultiLine(1);
+        linenoiseHistorySetMaxLen(1024);
+        const char *homedir;
+        if ((homedir = getenv("HOME")) == NULL) {
+            homedir = getpwuid(getuid())->pw_dir;
+        }
+        history_file = malloc(strlen(homedir) + strlen("/.keiryaky_history") + 1);
+        sprintf(history_file, "%s/.keiryaky_history", homedir);
+        linenoiseHistoryLoad(history_file);
     }
 
     struct allocator *a = allocator_new();
     struct parser *p = parser_new(a);
 
     consume_file(p, "compiler.ss");
-    consume_stream(p, stdin);
+    if (isatty(fileno(stdin))) {
+        char *input;
+        while ((input = linenoise("> ")) != NULL) {
+            parser_consume(p, input, true);
+            linenoiseHistoryAdd(input);
+            linenoiseFree(input);
+        }
+        linenoiseHistorySave(history_file);
+    }
+    else {
+        consume_stream(p, stdin);
+    }
 
     if (arg_debug) {
         printf("cleaning up all remaining memory..\n");
@@ -105,6 +128,10 @@ int main(int argc, char **argv) {
 
     parser_free(p);
     allocator_free(a);
+
+    if (history_file) {
+        free(history_file);
+    }
 
     return 0;
 }
