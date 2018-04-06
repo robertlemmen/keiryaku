@@ -433,8 +433,8 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
         cp++;
     }
     if (mark) {
-        memmove(data, mark, cp-mark+1);
-        return cp-mark;
+        memmove(data, mark, cp - mark + 1);
+        return cp - mark;
     }
     return 0;
 }

@@ -109,10 +109,15 @@ int main(int argc, char **argv) {
     consume_file(p, "compiler.ss");
     if (isatty(fileno(stdin))) {
         char *input;
+        char buffer[BUFSIZE];
+        int pos = 0;
         while ((input = linenoise("> ")) != NULL) {
-            parser_consume(p, input, true);
-            linenoiseHistoryAdd(input);
+            strncpy(&buffer[pos], input, BUFSIZE-pos-1);
             linenoiseFree(input);
+            pos = parser_consume(p, buffer, false);
+            strncpy(&buffer[pos], "\n", BUFSIZE-pos-1);
+            pos = parser_consume(p, buffer, true);
+            linenoiseHistoryAdd(input);
         }
         linenoiseHistorySave(history_file);
     }
