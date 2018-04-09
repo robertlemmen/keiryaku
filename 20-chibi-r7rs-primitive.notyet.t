@@ -45,14 +45,14 @@
 ===
 28
 a
-#(a b c)
+(vector a b c)
 (+ 1 2)
 a
-#(a b c)
+(vector a b c)
 ()
 (+ 1 2)
-'a
-'a
+(quote a)
+(quote a)
 "abc"
 "abc"
 145932

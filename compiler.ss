@@ -130,12 +130,10 @@
         args))
 
 (define length
-    (let [(length-rec (lambda vals
-            (if (pair? vals)
-                (+ 1 (apply length-rec (cdr vals)))
-                0)))]
-        (lambda (l)
-            (apply length-rec l))))
+    (lambda (l)
+        (if (null? l)
+            0
+            (+ 1 (length (cdr l))))))
 
 (define vector
     (let [(list-vec-copy-rec (lambda (l v i)
