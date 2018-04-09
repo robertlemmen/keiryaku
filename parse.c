@@ -28,7 +28,8 @@ struct parser {
 #define P_BOOL      7
 #define P_QUOTE     8
 #define P_VECTOR    9
-#define P_EOF       10
+#define P_STRING    10
+#define P_EOF       11
 
 #define PP_CAR  0
 #define PP_MID  1
@@ -182,6 +183,19 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             }
             p->exp_stack_top = cl;
             break;
+        case P_STRING:
+            cv = make_string(p->alloc, str);
+            parser_store_cell(p, cv);
+            // also reduce quote expressions on the stack
+            cl = p->exp_stack_top;
+            while (cl && cl->quote) {
+                cv = cl->content;
+                struct expr_lnk *tmp = cl;
+                cl = cl->outer;
+                free(tmp);
+            }
+            p->exp_stack_top = cl;
+            break;
         case P_QUOTE:
             // XXX this is a combination of stuff above, could be refactored to
             // avoid duplication, also around reduction of quote expressions
@@ -262,6 +276,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
 #define S_IDENT     3
 #define S_HASH      4
 #define S_MINUS     5
+#define S_STRING    6
 
 // XXX and EOF token would be interesting, would mean we can detect mismatched
 // parens easier...
@@ -299,6 +314,10 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
             }
             else if (*cp == '#') {
                 p->tokenizer_state = S_HASH;
+            }
+            else if (*cp == '"') {
+                mark = cp;
+                p->tokenizer_state = S_STRING;
             }
             else if (*cp == '.') {
                 parser_parse(p, P_DOT, 0, NULL, interactive);
@@ -350,6 +369,17 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
                 int num_literal = strtol(mark, &ep, 10);
                 parser_parse(p, P_NUMBER, num_literal, NULL, interactive);
                 cp--;
+                mark = NULL;
+            }
+        }
+        else if (p->tokenizer_state == S_STRING) {
+            if (*cp == '"') {
+                p->tokenizer_state = S_INIT;
+                char *str = malloc(cp - mark);
+                strncpy(str, mark+1, cp - mark - 1);
+                str[cp - mark - 1] = '\0';
+                parser_parse(p, P_STRING, 0, str, interactive);
+                free(str);
                 mark = NULL;
             }
         }

@@ -206,6 +206,25 @@ value builtin_number(struct allocator *alloc, value v) {
         : VALUE_FALSE;
 }
 
+value builtin_string(struct allocator *alloc, value v) {
+    return value_is_string(v)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_string_length(struct allocator *alloc, value v) {
+    assert(value_is_string(v));
+    return make_int(alloc, strlen(value_to_string(&v)));
+}
+
+value builtin_string_eq(struct allocator *alloc, value a, value b) {
+    assert(value_is_string(a));
+    assert(value_is_string(b));
+    return (strcmp(value_to_string(&a), value_to_string(&b)) == 0)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
 // XXX we need a compiler transfrom to support (make-vector 12) without "fill"
 value builtin_make_vector(struct allocator *alloc, value l, value f) {
     assert(value_type(l) == TYPE_INT);
@@ -263,11 +282,15 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eq?"), make_builtin2(ret->alloc, &builtin_eq));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "null?"), make_builtin1(ret->alloc, &builtin_null));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "number?"), make_builtin1(ret->alloc, &builtin_number));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "string?"), make_builtin1(ret->alloc, &builtin_string));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "string-length"), make_builtin1(ret->alloc, &builtin_string_length));
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "string=?"), make_builtin2(ret->alloc, &builtin_string_eq));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "make-vector"), make_builtin2(ret->alloc, &builtin_make_vector));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector?"), make_builtin1(ret->alloc, &builtin_vector));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector-length"), make_builtin1(ret->alloc, &builtin_vector_length));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector-ref"), make_builtin2(ret->alloc, &builtin_vector_ref));
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "vector-set!"), make_builtin3(ret->alloc, &builtin_vector_set));
+
 
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
@@ -324,6 +347,8 @@ tailcall_label:
         case TYPE_INT:
         case TYPE_FLOAT:
         case TYPE_ENUM:
+        case TYPE_STRING:
+        case TYPE_SHORT_STRING:
             return expr;
             break;
 
