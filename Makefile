@@ -41,7 +41,7 @@ linenoise.o: linenoise/linenoise.c linenoise/linenoise.h
 test: $(TARGET)
 	@echo "Running Tests..."
 	@failed_count=0; \
-	for tf in *.t; do \
+	for tf in $$(find t -name "*.t"); do \
 		[ -e "$$tf" ] || continue; \
 		echo "  $$tf ..."; \
 		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) > /tmp/result; \
