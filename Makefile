@@ -12,7 +12,7 @@ VERSION_STRING=$(if $(GIT_TAG),$(GIT_TAG),$(GIT_HASH))$(if $(GIT_DIRTY), (dirty)
 
 .PHONY: clean test version.c
 
-$(TARGET): $(OBJECTS) version.o linenoise.o
+$(TARGET): $(OBJECTS) version.o
 	@echo "Linking $@..."
 	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
 
@@ -32,11 +32,6 @@ version.c:
 	@$(CC) -MM $(CFLAGS) $(CINCFLAGS) -c $< > $*.d
 
 version.o: version.c
-
-linenoise.o: linenoise/linenoise.c linenoise/linenoise.h
-	@echo "Compiling $<..."
-	@$(CC) $(CFLAGS) $(CINCFLAGS) -c $< 
-	@$(CC) -MM $(CFLAGS) $(CINCFLAGS) -c $< > $*.d
 
 test: $(TARGET)
 	@echo "Running Tests..."

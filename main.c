@@ -7,7 +7,7 @@
 #include <getopt.h>
 #include <pwd.h>
 
-#include "linenoise/linenoise.h"
+#include "linenoise/linenoise.c"
 #include "types.h"
 #include "heap.h"
 #include "eval.h"
@@ -98,8 +98,8 @@ int main(int argc, char **argv) {
         if ((homedir = getenv("HOME")) == NULL) {
             homedir = getpwuid(getuid())->pw_dir;
         }
-        history_file = malloc(strlen(homedir) + strlen("/.keiryaky_history") + 1);
-        sprintf(history_file, "%s/.keiryaky_history", homedir);
+        history_file = malloc(strlen(homedir) + strlen("/.keiryaku_history") + 1);
+        sprintf(history_file, "%s/.keiryaku_history", homedir);
         linenoiseHistoryLoad(history_file);
     }
 
@@ -113,11 +113,11 @@ int main(int argc, char **argv) {
         int pos = 0;
         while ((input = linenoise("> ")) != NULL) {
             strncpy(&buffer[pos], input, BUFSIZE-pos-1);
-            linenoiseFree(input);
             pos = parser_consume(p, buffer, false);
             strncpy(&buffer[pos], "\n", BUFSIZE-pos-1);
             pos = parser_consume(p, buffer, true);
             linenoiseHistoryAdd(input);
+            free(input);
         }
         linenoiseHistorySave(history_file);
     }
