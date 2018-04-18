@@ -143,8 +143,13 @@ void dump_value(value v) {
     }
 }
 
+// regrettably, function pointers are not aligned and therefore
+// cannot be immediates...
+// XXX perhaps we can convince gcc to align functions as well?
+// note that having the builtin on the heap has the benfit that 
+// we can later move the arity there as well, when we run out of
+// tag bits. but it would be faster to call them directly...
 value make_builtin1(struct allocator *a, t_builtin1 funcptr) {
-    // XXX why can't this be an immediate?
     t_builtin1 *p = allocator_alloc(a, sizeof(t_builtin1));
     *p = funcptr;
     value ret = (uint64_t)p | TYPE_BUILTIN1;
@@ -158,7 +163,6 @@ t_builtin1 builtin1_ptr(value v) {
 }
 
 value make_builtin2(struct allocator *a, t_builtin2 funcptr) {
-    // XXX why can't this be an immediate?
     t_builtin2 *p = allocator_alloc(a, sizeof(t_builtin2));
     *p = funcptr;
     value ret = (uint64_t)p | TYPE_BUILTIN2;
@@ -172,7 +176,6 @@ t_builtin2 builtin2_ptr(value v) {
 }
 
 value make_builtin3(struct allocator *a, t_builtin3 funcptr) {
-    // XXX why can't this be an immediate?
     t_builtin3 *p = allocator_alloc(a, sizeof(t_builtin3));
     *p = funcptr;
     value ret = (uint64_t)p | TYPE_BUILTIN3;

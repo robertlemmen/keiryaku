@@ -8,6 +8,7 @@
 
 #include "types.h"
 #include "interp.h"
+#include "global.h"
 
 struct parser {
     struct allocator *alloc;
@@ -260,10 +261,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             dump_value(result);
             printf("\n");
         }
-        if (interactive) {
-            // XXX should not depend on interactive, but should only run when
-            // some pressure builds. except the final one in main, which should
-            // run all the time for valgrind
+        if (arg_debug) {
             interp_gc(p->interp);
         }
     }
@@ -496,5 +494,10 @@ void parser_eof(struct parser *p) {
     // XXX for now we run a GC cycle after each file, which of course won't work
     // for long-running programs. if we run GC from interp_eval, we need to add
     // values on the stack to the gc roots as well...
+    interp_gc(p->interp);
+}
+
+void parser_gc(struct parser *p) {
+    assert(p != NULL);
     interp_gc(p->interp);
 }

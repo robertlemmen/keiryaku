@@ -51,9 +51,10 @@
  *   010 - builtin1 (stuff callable from scheme but written in C, arity 1
  *                   the pointer part is the address of the function to call)
  *   011 - builtin2
- *   100 - interpreter lambda
- *   101 - vector
- *   110 - string
+ *   100 - builtin3
+ *   101 - interpreter lambda
+ *   110 - vector
+ *   111 - string
  *
  * XXX will need boxes ?
  *  */
@@ -78,10 +79,10 @@ typedef uint64_t value;
 #define TYPE_CONS             0b0010
 #define TYPE_BUILTIN1         0b0100
 #define TYPE_BUILTIN2         0b0110
-#define TYPE_BUILTIN3         0b0111
-#define TYPE_INTERP_LAMBDA    0b1000
-#define TYPE_VECTOR           0b1010
-#define TYPE_STRING           0b1100
+#define TYPE_BUILTIN3         0b1000
+#define TYPE_INTERP_LAMBDA    0b1010
+#define TYPE_VECTOR           0b1100
+#define TYPE_STRING           0b1110
 
 #define VALUE_NIL         0b00000101
 #define VALUE_TRUE        0b00010101

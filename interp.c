@@ -633,8 +633,10 @@ void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l
     }
     struct interp_env *ce = l->env;
     while (ce) {
+        allocator_gc_add_nonval_root(gc, ce);
         struct interp_env_entry *ee = ce->entries;
         while (ee) {
+            allocator_gc_add_nonval_root(gc, ee);
             allocator_gc_add_root(gc, ee->name);
             allocator_gc_add_root(gc, ee->value);
             ee = ee->next;

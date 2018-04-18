@@ -23,6 +23,7 @@ static struct option long_options[] = {
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'v'},
     {"debug", no_argument, 0, 'd'},
+    {"no-compiler", no_argument, 0, 'N'},
     {0, 0, 0, 0}
 };
 
@@ -31,7 +32,8 @@ void usage(char *prog_name) {
         "Options:\n"
         "  --help -h -?     print this text\n"
         "  --version -v     print the program version\n"
-        "  --debug -d       switch on code helpful in debug environments\n\n",
+        "  --debug -d       switch on code helpful in debug environments\n"
+        "  --no-compiler -N do not load compiler, bare interpreter\n\n",
         prog_name);
 }
 
@@ -60,6 +62,8 @@ int main(int argc, char **argv) {
 
     char *history_file = NULL;
 
+    bool load_compiler = true;
+
     while (1) {
         c = getopt_long(argc, argv, "?hvd", long_options, &option_index);
         if (c == -1) {
@@ -73,6 +77,9 @@ int main(int argc, char **argv) {
                 break;
             case 'd':
                 arg_debug = 1;
+                break;
+            case 'N':
+                load_compiler = false;
                 break;
             case 'h':
             case '?':
@@ -106,7 +113,16 @@ int main(int argc, char **argv) {
     struct allocator *a = allocator_new();
     struct parser *p = parser_new(a);
 
-    consume_file(p, "compiler.ss");
+    if (load_compiler) {
+        consume_file(p, "compiler.ss");
+    }
+
+    if (arg_debug) {
+//        printf("runnint initial GC..\n");
+        parser_gc(p);
+    }
+
+//    printf("-----------------------------\n");
     if (isatty(fileno(stdin))) {
         char *input;
         char buffer[BUFSIZE];
@@ -124,11 +140,11 @@ int main(int argc, char **argv) {
     else {
         consume_stream(p, stdin);
     }
+//    printf("-----------------------------\n");
 
     if (arg_debug) {
-        printf("cleaning up all remaining memory..\n");
-        struct allocator_gc_ctx *gc = allocator_gc_new(a);
-        allocator_gc_perform(gc);
+//        printf("cleaning up all remaining memory..\n");
+        parser_gc(p);
     }
 
     parser_free(p);

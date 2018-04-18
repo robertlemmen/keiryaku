@@ -36,10 +36,10 @@ version.o: version.c
 test: $(TARGET)
 	@echo "Running Tests..."
 	@failed_count=0; \
-	for tf in $$(find t -name "*.t"); do \
+	for tf in $$(find t -name "*.t" | sort); do \
 		[ -e "$$tf" ] || continue; \
 		echo "  $$tf ..."; \
-		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) > /tmp/result; \
+		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) --debug > /tmp/result; \
 		cat $$tf | grep -v "^;" | sed '1,/===/d' > /tmp/expected; \
 		diff -uB /tmp/expected /tmp/result > /tmp/diff || true; \
 		if [ -s /tmp/diff ]; then \

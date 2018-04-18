@@ -73,6 +73,7 @@ arena alloc_arena(void) {
     struct arena_header *ah = ret;
     ah->scan_cache = 1024; // first actual cell
 
+//    printf("new arena! 0x%016lX\n", ret);
     return ret;
 }
 
@@ -140,6 +141,12 @@ block alloc_block(arena a, int s) {
 //
 //    dump_arena_meta(a);
 
+//    printf("alloc_block -> 0x%016lX\n", ret);
+    cell_idx = cell_index(ret);
+    assert(!meta_get_mark(a, cell_idx));
+    if (arg_debug) {
+        memset(ret, 0x16, s);
+    }
     return ret;
 }
 
@@ -174,7 +181,6 @@ cell allocator_alloc(struct allocator *a, int s) {
             // that allocator is full, try the next one
             struct arena_header *ah = current_arena;
             if (!ah->next) {
-//                printf("new arena!\n");
                 arena new_arena = alloc_arena();
                 struct arena_header *nah = new_arena;
                 nah->next = a->first_arena;
@@ -188,6 +194,8 @@ cell allocator_alloc(struct allocator *a, int s) {
             }
         }
         else {
+            assert(((uint64_t)ret & 15) == 0);
+            assert(cell_to_arena(ret) == current_arena);
             return ret;
         }
     } while (1);
@@ -225,6 +233,7 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, value v) {
     if (value_is_immediate(v)) {
         return;
     }
+//    printf("allocator_gc_add_root 0x%016lX %i\n", value_to_cell(v), value_type(v));
     if (gc->list->count == GC_LIST_SIZE) {
         gc->list = new_gc_list(gc->list);
     }
@@ -234,15 +243,16 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, value v) {
 
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m) {
     // we mark these right away
+//    printf("allocator_gc_add_nonval_root 0x%016lX\n", m);
     uint_fast16_t cell_idx = cell_index(m);
-    arena a = gc->a->first_arena;
+    arena a = cell_to_arena(m);
     meta_set_mark(a, cell_idx);
 }
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 //    printf("# Doing GC!\n");
 
-//    int roots = gc->list->count;
+    int roots = gc->list->count;
     int visited = 0;
     int reclaimed = 0;
 
@@ -265,7 +275,9 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                 meta_set_mark(a, cell_idx);
                 switch (value_type(cv)) {
                     case TYPE_CONS:
+//                        printf("traverse-mark-cons 0x%016lX\n", car(cv));
                         allocator_gc_add_root(gc, car(cv));
+//                        printf("traverse-mark-cons 0x%016lX\n", cdr(cv));
                         allocator_gc_add_root(gc, cdr(cv));
                         break;
                     case TYPE_INTERP_LAMBDA:
