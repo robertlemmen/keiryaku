@@ -2,6 +2,7 @@
 #define HEAP_H
 
 #include <stdint.h>
+#include <stdbool.h>
 
 /* Heap Organization
  *
@@ -62,6 +63,8 @@ void allocator_free(struct allocator *a);
 
 cell allocator_alloc(struct allocator *a, int s);
 
+bool allocator_needs_gc(struct allocator *a);
+
 struct allocator_gc_ctx;
 
 struct allocator_gc_ctx* allocator_gc_new(struct allocator *a);
@@ -70,5 +73,6 @@ struct allocator_gc_ctx* allocator_gc_new(struct allocator *a);
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, uint64_t v);
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m);
 void allocator_gc_perform(struct allocator_gc_ctx *gc);
+
 
 #endif /* HEAP_H */

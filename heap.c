@@ -92,15 +92,12 @@ block alloc_block(arena a, int s) {
     struct arena_header *ah = a;
     uint_fast16_t cell_idx = ah->scan_cache;
 
-//    printf("alloc of %i bytes, %i cells, starting at idx %lu\n", s, cc, cell_idx);
-
     if (cell_idx == 0) {
-//        fprintf(stderr, "arena is entirely full after %i calls!\n", call_count);
         // this arena is entirely full
         return NULL;
     }
 
-    uint_fast16_t cc = (s + 15) & ~15; // number of cells required
+    uint_fast16_t cc = ((s + 15) & ~15) >> 4; // number of cells required
 
     assert(!meta_get_block(a, cell_idx));
     assert(meta_get_mark(a, cell_idx));
@@ -116,7 +113,9 @@ block alloc_block(arena a, int s) {
             // XXX we also take extents, which actually makes this easier
             if (meta_get_block(a, cell_idx + i) || ! meta_get_mark(a, cell_idx + i)) {
                 // the free block is not long enough
-                // XXX handle properly
+                // XXX handle properly, we should scan to next one but not
+                // update scan_cache
+//                printf("free block is not large enough\n");
                 return NULL;
             }
         }
@@ -133,20 +132,21 @@ block alloc_block(arena a, int s) {
     }
     // scan to next free cell
     cell_idx = ah->scan_cache;
-    while ((ah->scan_cache != 0) && meta_get_block(a, cell_idx) && !meta_get_mark(a, cell_idx)) {
-        ah->scan_cache++;
-        cell_idx = ah->scan_cache;
+    while ((ah->scan_cache != 0) && (meta_get_block(a, cell_idx) || !meta_get_mark(a, cell_idx))) {
+        cell_idx++;
     }
+    ah->scan_cache = cell_idx;
 //    printf("  scanned to next free cell in idx %lu\n", cell_idx);
 //
 //    dump_arena_meta(a);
 
-//    printf("alloc_block -> 0x%016lX\n", ret);
+//    printf("alloc_block in arena 0x%016lX -> 0x%016lX\n", a, ret);
     cell_idx = cell_index(ret);
     assert(!meta_get_mark(a, cell_idx));
     if (arg_debug) {
         memset(ret, 0x16, s);
     }
+
     return ret;
 }
 
@@ -156,11 +156,13 @@ void free_cell(cell c) {
 
 struct allocator {
     arena first_arena;
+    int pressure;
 };
 
 struct allocator* allocator_new(void) {
     struct allocator *ret = malloc(sizeof(struct allocator));
     ret->first_arena = alloc_arena();
+    ret->pressure = 0;
     return ret;
 }
 
@@ -175,10 +177,15 @@ void allocator_free(struct allocator *a) {
 cell allocator_alloc(struct allocator *a, int s) {
     assert(a != NULL);
     arena current_arena = a->first_arena;
+
+    // XXX a different way to assess pressure...
+    a->pressure++;
+
     do { 
         cell ret = alloc_block(current_arena, s);
         if (!ret) {
-            // that allocator is full, try the next one
+//            printf("arena 0x%016lX is full, trying next\n", current_arena);
+            // that arena is full, try the next one
             struct arena_header *ah = current_arena;
             if (!ah->next) {
                 arena new_arena = alloc_arena();
@@ -186,6 +193,7 @@ cell allocator_alloc(struct allocator *a, int s) {
                 nah->next = a->first_arena;
                 a->first_arena = new_arena;
                 current_arena = new_arena;
+
             }
             else {
                 // XXX we could avoid some re-scanning by moving full arenas
@@ -199,6 +207,10 @@ cell allocator_alloc(struct allocator *a, int s) {
             return ret;
         }
     } while (1);
+}
+
+bool allocator_needs_gc(struct allocator *a) {
+    return a->pressure > 10000; // XXX for now
 }
 
 // XXX use posix_memalign for this, and assert it has the right size.
@@ -252,6 +264,8 @@ void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m) {
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 //    printf("# Doing GC!\n");
 
+    gc->a->pressure = 0;
+
     int roots = gc->list->count;
     int visited = 0;
     int reclaimed = 0;
@@ -269,15 +283,14 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             visited++;
             arena a = cell_to_arena(value_to_cell(cv));
             uint_fast16_t cell_idx = cell_index(value_to_cell(cv));
-    //        assert(meta_get_block(a, cell_idx));
+            assert(meta_get_block(a, cell_idx));
             if (!meta_get_mark(a, cell_idx)) {
                 // not marked yet
                 meta_set_mark(a, cell_idx);
+//                printf("marking 0x%016lX ", cell_from_cell_index(a, cell_idx));
                 switch (value_type(cv)) {
                     case TYPE_CONS:
-//                        printf("traverse-mark-cons 0x%016lX\n", car(cv));
                         allocator_gc_add_root(gc, car(cv));
-//                        printf("traverse-mark-cons 0x%016lX\n", cdr(cv));
                         allocator_gc_add_root(gc, cdr(cv));
                         break;
                     case TYPE_INTERP_LAMBDA:
@@ -302,6 +315,12 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                 reclaimed++;
                 meta_clear_block(a, i);
                 meta_set_mark(a, i);
+                // printf("reclaiming 0x%016lX\n", cell_from_cell_index(a, i));
+                // reclaim extent
+                int j = i+1;
+                while ((j != 0) && (!meta_get_block(a, j) && !meta_get_mark(a, j))) {
+                    meta_set_mark(a, j);
+                }
                 // XXX deal with subsequent extents
                 if (arg_debug) {
                     void *cell = cell_from_cell_index(a, i);
@@ -312,11 +331,33 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                 }
             }
         }
+        // XXX temp unmark
+        for (int i = 1024; i < 65535; i++) {
+            if (meta_get_block(a, i) && meta_get_mark(a, i)) {
+                meta_clear_mark(a, i);
+            }
+        }
         struct arena_header *ah = a;
+        // reset scan_cache
+        uint_fast16_t cell_idx = 1024;
+        while ((ah->scan_cache != 0) && (meta_get_block(a, cell_idx) || !meta_get_mark(a, cell_idx))) {
+            cell_idx++;
+        }
+        if (ah->scan_cache != 0) {
+            assert(!meta_get_block(a, cell_idx));
+            assert(meta_get_mark(a, cell_idx));
+        }
+        ah->scan_cache = cell_idx;
+//        printf("scan_cache for arena 0x%016lX is %d\n", a, cell_idx);
         a = ah->next;
     }
 
+    // XXX faster unmark: flip a bit in the allocator and check for equals that in
+    // get_mark/set_mark. new arenas need to be created with that bit set
+    // correctly!
+
 //    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
+//    fflush(stdout);
 
     free(gc->list);
     free(gc);

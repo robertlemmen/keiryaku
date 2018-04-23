@@ -44,7 +44,9 @@ value env_lookup(struct interp_env *env, value symbol) {
     while (env) {
         struct interp_env_entry *ee = env->entries;
         while (ee) {
-            assert(value_is_symbol(ee->name));
+            if (!value_is_symbol(ee->name)) {
+                assert(value_is_symbol(ee->name));
+            }
             if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
                 return ee->value;
             }
@@ -344,7 +346,7 @@ int interp_count_list(value expr) {
  *   */
 
 
-#define NUM_LOCALS  4
+#define NUM_LOCALS  5
 
 struct call_frame {
     value expr;                     // expr to be evaluated in this frame
@@ -365,7 +367,7 @@ struct call_frame* call_frame_new(struct allocator *alloc, struct call_frame *ou
         ret->locals[i] = VALUE_NIL;
     }
     ret->extra_env = NULL;
-    ret->outer = NULL;
+    ret->outer = outer;
     return ret;
 }
 
@@ -374,9 +376,10 @@ value interp_eval_env_int(struct interp_ctx *i, struct call_frame *f);
 // XXX can we put a struct in the args rather than a pointer to it?
 value interp_eval_env(struct interp_ctx *i, struct call_frame *caller_frame, value expr, struct interp_env *env) {
     i->current_frame = call_frame_new(i->alloc, caller_frame, expr, env);
-    value ret = interp_eval_env_int(i, i->current_frame);
     // XXX may be cheaper to have bogus outer frame than to check all the
     // time...
+    // XXX i->current_frame is always == second argument... ??
+    value ret = interp_eval_env_int(i, i->current_frame);
     if (i->current_frame) {
         i->current_frame = i->current_frame->outer;
     }
@@ -388,6 +391,10 @@ value interp_eval_env_int(struct interp_ctx *i, struct call_frame *f) {
     assert(i != NULL);
 
 tailcall_label:
+
+    if (allocator_needs_gc(i->alloc)) {
+        interp_gc(i);
+    }
 
     switch (value_type(f->expr)) {
         case TYPE_INT:
@@ -575,8 +582,9 @@ tailcall_label:
                         arg_count);
                     return VALUE_NIL;
                 }
-                return funcptr(i->alloc, interp_eval_env(i, f, pos_args[0], f->env), 
-                                         interp_eval_env(i, f, pos_args[1], f->env));
+                f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
+                f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
+                return funcptr(i->alloc, f->locals[2], f->locals[3]);
             }
             else if (value_type(op) == TYPE_BUILTIN3) {
                 t_builtin3 funcptr = builtin3_ptr(op);
@@ -587,9 +595,10 @@ tailcall_label:
                         arg_count);
                     return VALUE_NIL;
                 }
-                return funcptr(i->alloc, interp_eval_env(i, f, pos_args[0], f->env), 
-                                         interp_eval_env(i, f, pos_args[1], f->env),
-                                         interp_eval_env(i, f, pos_args[2], f->env));
+                f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
+                f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
+                f->locals[4] = interp_eval_env(i, f, pos_args[2], f->env);
+                return funcptr(i->alloc, f->locals[2], f->locals[3], f->locals[4]);
             }
             else if (value_type(op) == TYPE_INTERP_LAMBDA) {
                 struct interp_lambda *lambda = value_to_interp_lambda(op);
@@ -602,15 +611,15 @@ tailcall_label:
                     value out_ca = VALUE_NIL;
                     value current_arg = cdr(f->expr);
                     for (int idx = 0; idx < application_arity; idx++) {
-                        value temp = make_cons(i->alloc, interp_eval_env(i,f, car(current_arg), f->env), VALUE_EMPTY_LIST);
+                        f->locals[2] = make_cons(i->alloc, interp_eval_env(i,f, car(current_arg), f->env), VALUE_EMPTY_LIST);
                         current_arg = cdr(current_arg);
                         if (f->locals[1] == VALUE_EMPTY_LIST) {
-                            f->locals[1] = temp;
-                            out_ca = temp;
+                            f->locals[1] = f->locals[2];
+                            out_ca = f->locals[2];
                         }
                         else {
-                            set_cdr(out_ca, temp);
-                            out_ca = temp;
+                            set_cdr(out_ca, f->locals[2]);
+                            out_ca = f->locals[2];
                         }
                     }
                     // XXX hmm, if we could bind arg_list first and set! in the
@@ -624,12 +633,14 @@ tailcall_label:
                             lambda->arity, application_arity);
                         return VALUE_NIL;
                     }
-                    value current_arg = cdr(f->expr);
+                    // XXX this does not need to be a local
+                    f->locals[2] = cdr(f->expr);
                     for (int idx = 0; idx < application_arity; idx++) {
-                        env_bind(i->alloc, f->extra_env, lambda->arg_names[idx],
-                            interp_eval_env(i, f, car(current_arg), f->env));
-                        current_arg = cdr(current_arg);
+                        value t = interp_eval_env(i, f, car(f->locals[2]), f->env);
+                        env_bind(i->alloc, f->extra_env, lambda->arg_names[idx], t);
+                        f->locals[2] = cdr(f->locals[2]);
                     }
+                    f->locals[2] = VALUE_NIL;
                 }
                 // XXX is there a way to not allocate an env in all
                 // cases? perhaps we can reuse the one we have in recursions?
@@ -668,8 +679,11 @@ void interp_add_gc_root_env(struct allocator_gc_ctx *gc, struct interp_env *env)
 
 void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f) {
     while (f) {
-        allocator_gc_add_nonval_root(gc, f->env);
-        allocator_gc_add_nonval_root(gc, f->extra_env);
+        allocator_gc_add_root(gc, f->expr);
+        interp_add_gc_root_env(gc, f->env);
+        if (f->extra_env) {
+            interp_add_gc_root_env(gc, f->extra_env);
+        }
         for (int i = 0; i < NUM_LOCALS; i++) {
             allocator_gc_add_root(gc, f->locals[i]);
         }

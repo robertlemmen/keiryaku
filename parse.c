@@ -8,7 +8,6 @@
 
 #include "types.h"
 #include "interp.h"
-#include "global.h"
 
 struct parser {
     struct allocator *alloc;
@@ -78,6 +77,7 @@ void parser_store_cell(struct parser *p, value cv) {
     }
 }
 
+// XXX noone uses interactive anymore, clean it up!
 void parser_parse(struct parser *p, int tok, int num, char *str, bool interactive) {
     value cv = VALUE_NIL;
     struct expr_lnk *cl;
@@ -261,10 +261,6 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
             dump_value(result);
             printf("\n");
         }
-        // XXX should not depend on interactive, but should only run when
-        // some pressure builds. except the final one in main, which should
-        // run all the time for valgrind
-        interp_gc(p->interp);
     }
 }
 /* the tokenizer takes in input string and tokenizes it, calling parse() for

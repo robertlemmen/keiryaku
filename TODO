@@ -1,4 +1,3 @@
 - support for half-variadic lambda ((lambda (x y . z) z) (towards
   20-chibi-primitives.t)
-- there must be some way to re-use the env frame in a simple tail call!
-- gc while running eval
+- properly scan heap for free block when request > 1 cell
