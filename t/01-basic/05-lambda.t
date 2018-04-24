@@ -32,6 +32,19 @@
 (apply sum2 '(1 3 5))
 (list 'x 1 2)
 (list 'y (list 'x 1 2) 3)
+
+(define test1 (lambda (a b) (list a b)))
+(test1 1 2)
+
+(define test2 (lambda vals vals))
+(test2 )
+(test2 'a)
+(test2 'a 'b)
+
+(define test3 (lambda (x y . z) (list x y z)))
+(test3 3 4)
+(test3 3 4 5)
+(test3 3 4 5 6)
 ===
 9
 720
@@ -40,3 +53,11 @@
 9
 (x 1 2)
 (y (x 1 2) 3)
+(1 2)
+()
+(a)
+(a b)
+(3 4 ())
+(3 4 (5))
+(3 4 (5 6))
+

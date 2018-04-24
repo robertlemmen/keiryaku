@@ -329,11 +329,47 @@ int interp_collect_list(value expr, int count, value *collector) {
     return pos;
 }
 
+int interp_collect_nonlist(value expr, int count, value *collector) {
+    assert(collector != NULL);
+    assert(count >= 0);
+    int pos = 0;
+    value ca = expr;
+    while (value_type(ca) == TYPE_CONS) {
+        if (pos < count) {
+            collector[pos] = car(ca);
+        }
+        pos++;
+        ca = cdr(ca);
+    }
+    if ((ca != VALUE_NIL) && (ca != VALUE_EMPTY_LIST)) {
+        collector[pos] = ca;
+    }
+    return pos;
+}
+
 int interp_count_list(value expr) {
     int ret = 0;
     while (value_type(expr) == TYPE_CONS) {
         ret++;
         expr = cdr(expr);
+    }
+    return ret;
+}
+
+// XXX we could use onlu the _nonlist variants
+// also counts non-list trailing args so (a b . c) => 3
+int interp_count_nonlist(value expr, bool *well_formed) {
+    int ret = 0;
+    while (value_type(expr) == TYPE_CONS) {
+        ret++;
+        expr = cdr(expr);
+    }
+    if ((expr != VALUE_NIL) && (expr != VALUE_EMPTY_LIST)) {
+        ret++;
+        *well_formed = false;
+    }
+    else {
+        *well_formed = true;
     }
     return ret;
 }
@@ -468,8 +504,7 @@ tailcall_label:
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_LAMBDA:;
-                        // XXX in case of a variadic lamda, the list may be longer. for
-                        // later...
+                        // XXX we need to support half-variadics as well
                         struct interp_lambda *lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda));
                         lambda->env = f->env;
                         arg_count = interp_collect_list(args, 2, pos_args);
@@ -478,17 +513,18 @@ tailcall_label:
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (value_type(car(args)) == TYPE_CONS) {
-                            lambda->variadic = 0;
-                            lambda->arity = interp_count_list(pos_args[0]);
-                            lambda->arg_names = allocator_alloc(i->alloc, sizeof(value) * lambda->arity);
-                            interp_collect_list(pos_args[0], lambda->arity, lambda->arg_names);
-                        }
-                        else {
+                        if (value_type(car(args)) != TYPE_CONS) {
                             lambda->variadic = 1;
-                            lambda->arity = 1; // XXX for now, see above
+                            lambda->arity = 1; 
                             lambda->arg_names = allocator_alloc(i->alloc, sizeof(value) * lambda->arity);
                             lambda->arg_names[0] = car(args);
+                        }
+                        else {
+                            bool well_formed;
+                            lambda->arity = interp_count_nonlist(pos_args[0], &well_formed);
+                            lambda->variadic = well_formed ? 0 : 1;
+                            lambda->arg_names = allocator_alloc(i->alloc, sizeof(value) * lambda->arity);
+                            interp_collect_nonlist(pos_args[0], lambda->arity, lambda->arg_names);
                         }
                         lambda->body = pos_args[1];
                         return make_interp_lambda(lambda);
@@ -607,10 +643,18 @@ tailcall_label:
                 // ->outer is lambda->env, btu somehow that doesn't work...
                 f->extra_env = env_new(i->alloc, lambda->env);
                 if (lambda->variadic) {
+                    int ax;
+                    // XXX this does not need to be a local
+                    f->locals[2] = cdr(f->expr);
+                    for (ax = 0; ax < lambda->arity - 1; ax++) {
+                        value t = interp_eval_env(i, f, car(f->locals[2]), f->env);
+                        env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], t);
+                        f->locals[2] = cdr(f->locals[2]);
+                    }
                     f->locals[1] = VALUE_EMPTY_LIST;
                     value out_ca = VALUE_NIL;
-                    value current_arg = cdr(f->expr);
-                    for (int idx = 0; idx < application_arity; idx++) {
+                    value current_arg = f->locals[2];
+                    for (int idx = ax; idx < application_arity; idx++) {
                         f->locals[2] = make_cons(i->alloc, interp_eval_env(i,f, car(current_arg), f->env), VALUE_EMPTY_LIST);
                         current_arg = cdr(current_arg);
                         if (f->locals[1] == VALUE_EMPTY_LIST) {
@@ -624,7 +668,7 @@ tailcall_label:
                     }
                     // XXX hmm, if we could bind arg_list first and set! in the
                     // env, we could save one local...
-                    env_bind(i->alloc, f->extra_env, lambda->arg_names[0], f->locals[1]);
+                    env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], f->locals[1]);
                     f->locals[1] = VALUE_NIL;
                 }
                 else {

@@ -1,3 +1,4 @@
-- support for half-variadic lambda ((lambda (x y . z) z) (towards
-  20-chibi-primitives.t)
+- implement case, assv and friends, variadic or/and. towards 02-chibi-derived 
+- even more tests from chibi source
 - properly scan heap for free block when request > 1 cell
+- clean up empty arenas at end, to find stuff that we failed to collect
