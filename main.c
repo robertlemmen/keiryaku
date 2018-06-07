@@ -8,9 +8,7 @@
 #include <pwd.h>
 
 #include "linenoise/linenoise.c"
-#include "types.h"
 #include "heap.h"
-#include "eval.h"
 #include "parse.h"
 #include "version.h"
 #include "global.h"
