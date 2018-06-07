@@ -12,32 +12,34 @@
  * the lower 4 bits are used for tagging. a value can either hold a "immediate" value,
  * or hold a pointer to a heap-allocated object. the lowest order bit is used to
  * distinguish between immmediate and non-immediate values.
- *   0 - non-immediate
- *   1 - immediate
+ *   0 - immediate
+ *   1 - non-immediate
  *
  * in the case of immediate values, the next 3 bits are used to determine the type
  * of the value: 
- *   000 - integer
- *   001 - float 
- *   010 - enumerated. 
- *   011 - short symbol
+ *   000_ - integer
+ *   001_ - float
+ *   010_ - enumerated
+ *   011_ - short symbol
+ *   100_ - short string
  *
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
- *   0000 - Nil (internal, not usable in the scheme layer)
- *   0001 - True
- *   0010 - False
- *   0011 - Empty List
+ *   0000____ - Nil (internal, not usable in the scheme layer)
+ *   0001____ - True
+ *   0010____ - False
+ *   0011____ - Empty List
  *
  * 'Specials' all have the fourth bit of that set, to make testing for them
  * easier:
- *   1000 'If' Special
- *   1001 'Define' Special
- *   1010 'Lambda' Special
- *   1011 'Begin' Special
- *   1100 'Quote' Special
- *   1101 'Let' Special
- *   1110 'Apply' Special
+ * XXX would be nicer if this was the lowest-order bit
+ *   1000____ - 'If' Special
+ *   1001____ - 'Define' Special
+ *   1010____ - 'Lambda' Special
+ *   1011____ - 'Begin' Special
+ *   1100____ - 'Quote' Special
+ *   1101____ - 'Let' Special
+ *   1110____ - 'Apply' Special
  *
  * this means that enumerated "special" values can be compared for equality 
  * directly, by comparing the value bitwise.
@@ -46,15 +48,15 @@
  * type information, and the remaining bits contain the pointer (when the lower 
  * three bits are masked off) of the heap cell. We have a set of non-immediate 
  * types:
- *   000 - symbol
- *   001 - cons
- *   010 - builtin1 (stuff callable from scheme but written in C, arity 1
+ *   000_ - symbol
+ *   001_ - cons
+ *   010_ - builtin1 (stuff callable from scheme but written in C, arity 1
  *                   the pointer part is the address of the function to call)
- *   011 - builtin2
- *   100 - builtin3
- *   101 - interpreter lambda
- *   110 - vector
- *   111 - string
+ *   011_ - builtin2
+ *   100_ - builtin3
+ *   101_ - interpreter lambda
+ *   110_ - vector
+ *   111_ - string
  *
  * XXX will need boxes ?
  *  */
@@ -71,42 +73,44 @@
 
 typedef uint64_t value;
 
-#define value_is_immediate(x) (((x) & 1))
+#define value_is_immediate(x) (!(((x) & 1)))
 #define value_type(x) ((x) & 15)
 #define value_to_cell(x) (void*)((x) & ~15) // XXX should be called block?
 
-#define TYPE_INT              0b0001
-#define TYPE_FLOAT            0b0011
-#define TYPE_ENUM             0b0101
-#define TYPE_SHORT_SYMBOL     0b0111
-#define TYPE_SHORT_STRING     0b1001
+#define TYPE_ENUM             0b0000
+#define TYPE_INT              0b0010
+#define TYPE_FLOAT            0b0100
+#define TYPE_SHORT_SYMBOL     0b0110
+#define TYPE_SHORT_STRING     0b1000
 
-#define TYPE_SYMBOL           0b0000
-#define TYPE_CONS             0b0010
-#define TYPE_BUILTIN1         0b0100
-#define TYPE_BUILTIN2         0b0110
-#define TYPE_BUILTIN3         0b1000
-#define TYPE_INTERP_LAMBDA    0b1010
-#define TYPE_VECTOR           0b1100
-#define TYPE_STRING           0b1110
+#define TYPE_SYMBOL           0b0001
+#define TYPE_CONS             0b0011
+#define TYPE_BUILTIN1         0b0101
+#define TYPE_BUILTIN2         0b0111
+#define TYPE_BUILTIN3         0b1001
+#define TYPE_INTERP_LAMBDA    0b1011
+#define TYPE_VECTOR           0b1101
+#define TYPE_STRING           0b1111
 
-#define VALUE_NIL         0b00000101
-#define VALUE_TRUE        0b00010101
-#define VALUE_FALSE       0b00100101
-#define VALUE_EMPTY_LIST  0b00110101
+// XXX we should not need a nil, but then we need to make sure there are no CONS
+// that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
+#define VALUE_NIL         0b00000000
+#define VALUE_TRUE        0b00010000
+#define VALUE_FALSE       0b00100000
+#define VALUE_EMPTY_LIST  0b00110000
 
-#define VALUE_SP_IF       0b10000101
-#define VALUE_SP_DEFINE   0b10010101
-#define VALUE_SP_LAMBDA   0b10100101
-#define VALUE_SP_BEGIN    0b10110101
-#define VALUE_SP_QUOTE    0b11000101
-#define VALUE_SP_LET      0b11010101
-#define VALUE_SP_APPLY    0b11100101
+#define VALUE_SP_IF       0b10000000
+#define VALUE_SP_DEFINE   0b10010000
+#define VALUE_SP_LAMBDA   0b10100000
+#define VALUE_SP_BEGIN    0b10110000
+#define VALUE_SP_QUOTE    0b11000000
+#define VALUE_SP_LET      0b11010000
+#define VALUE_SP_APPLY    0b11100000
 
-#define value_is_special(x) (((x) & 0b10001111) == 0b10000101)
+#define value_is_special(x) (((x) & 0b10001111) == 0b10000000)
 
 /* values are considered true if they are not #f or an empty list */
-#define value_is_true(x) (((x) & 0b11101111) != 0b00100101)
+#define value_is_true(x) (((x) & 0b11101111) != VALUE_FALSE)
 
 #define intval(x) ((int32_t)((x) >> 32))
 #define make_int(a, x) (((uint64_t)(x) << 32) | TYPE_INT)

@@ -472,7 +472,7 @@
 (a b c d e f g d h)
 (ice cream with topping for dessert)
 (pizza with and bacon)
-<?type 6>
+<?type 7>
 13
 4
 82
