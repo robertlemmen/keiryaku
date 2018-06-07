@@ -164,6 +164,7 @@ int builtin_arity(value);
 typedef value (*t_builtin1)(struct allocator*, value);
 typedef value (*t_builtin2)(struct allocator*, value, value);
 typedef value (*t_builtin3)(struct allocator*, value, value, value);
+typedef value (*t_builtinv)(struct allocator*, value);
 
 value make_builtin1(struct allocator *a, t_builtin1 funcptr);
 t_builtin1 builtin1_ptr(value);
@@ -173,6 +174,9 @@ t_builtin2 builtin2_ptr(value);
 
 value make_builtin3(struct allocator *a, t_builtin3 funcptr);
 t_builtin3 builtin3_ptr(value);
+
+value make_builtinv(struct allocator *a, t_builtinv funcptr);
+t_builtinv builtinv_ptr(value);
 
 /* Lambdas
  * */

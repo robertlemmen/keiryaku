@@ -202,6 +202,21 @@ t_builtin3 builtin3_ptr(value v) {
     return p->funcptr3;
 }
 
+value make_builtinv(struct allocator *a, t_builtinv funcptr) {
+    struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
+    p->funcptr1 = funcptr;
+    p->arity = 0;
+    value ret = (uint64_t)p | TYPE_BUILTIN;
+    return ret;
+}
+
+t_builtinv builtinv_ptr(value v) {
+    assert(value_type(v) == TYPE_BUILTIN);
+    struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
+    assert(p->arity == 0);
+    return p->funcptr1;
+}
+
 value make_vector(struct allocator *a, int length, value fill) {
     value *ret = allocator_alloc(a, (length + 1) * sizeof(value));
     ret[0] = make_int(a, length);

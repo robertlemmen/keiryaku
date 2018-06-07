@@ -394,7 +394,27 @@ tailcall_label:
                 }
             }
             else if (value_type(op) == TYPE_BUILTIN) {
-                if (builtin_arity(op) == 1) {
+                if (builtin_arity(op) == 0) {
+                    value current_arg = cdr(f->expr);
+                    f->locals[1] = VALUE_EMPTY_LIST;
+                    value out_ca = VALUE_NIL;
+                    while (value_type(current_arg) == TYPE_CONS) {
+                        value temp = make_cons(i->alloc,
+                                               interp_eval_env(i, f, car(current_arg), f->env),
+                                               VALUE_EMPTY_LIST);
+                        if (f->locals[1] == VALUE_EMPTY_LIST) {
+                            f->locals[1] = temp;
+                        }
+                        else {
+                            set_cdr(out_ca, temp);
+                        }
+                        out_ca = temp;
+                        current_arg = cdr(current_arg);
+                    }
+                    t_builtinv funcptr = builtinv_ptr(op);
+                    return funcptr(i->alloc, f->locals[1]);
+                }
+                else if (builtin_arity(op) == 1) {
                     t_builtin1 funcptr = builtin1_ptr(op);
                     value pos_args[1];
                     int arg_count = interp_collect_list(cdr(f->expr), 1, pos_args);
@@ -455,8 +475,10 @@ tailcall_label:
                     f->locals[1] = VALUE_EMPTY_LIST;
                     value out_ca = VALUE_NIL;
                     value current_arg = f->locals[2];
+                    // XXX some of this list-building is nocer in the variadic
+                    // builtin case below
                     for (int idx = ax; idx < application_arity; idx++) {
-                        f->locals[2] = make_cons(i->alloc, interp_eval_env(i,f, car(current_arg), f->env), VALUE_EMPTY_LIST);
+                        f->locals[2] = make_cons(i->alloc, interp_eval_env(i, f, car(current_arg), f->env), VALUE_EMPTY_LIST);
                         current_arg = cdr(current_arg);
                         if (f->locals[1] == VALUE_EMPTY_LIST) {
                             f->locals[1] = f->locals[2];
