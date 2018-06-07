@@ -143,49 +143,63 @@ void dump_value(value v) {
     }
 }
 
-// regrettably, function pointers are not aligned and therefore
-// cannot be immediates...
-// XXX perhaps we can convince gcc to align functions as well?
-// note that having the builtin on the heap has the benfit that 
-// we can later move the arity there as well, when we run out of
-// tag bits. but it would be faster to call them directly...
+struct builtin_ref {
+    union {
+        t_builtin1 funcptr1;
+        t_builtin2 funcptr2;
+        t_builtin3 funcptr3;
+    };
+    int arity;
+};
+
+int builtin_arity(value v) {
+    struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
+    return p->arity;
+}
+
 value make_builtin1(struct allocator *a, t_builtin1 funcptr) {
-    t_builtin1 *p = allocator_alloc(a, sizeof(t_builtin1));
-    *p = funcptr;
-    value ret = (uint64_t)p | TYPE_BUILTIN1;
+    struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
+    p->funcptr1 = funcptr;
+    p->arity = 1;
+    value ret = (uint64_t)p | TYPE_BUILTIN;
     return ret;
 }
 
 t_builtin1 builtin1_ptr(value v) {
-    assert(value_type(v) == TYPE_BUILTIN1);
-    t_builtin1 *p = (t_builtin1*)value_to_cell(v);
-    return *p;
+    assert(value_type(v) == TYPE_BUILTIN);
+    struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
+    assert(p->arity == 1);
+    return p->funcptr1;
 }
 
 value make_builtin2(struct allocator *a, t_builtin2 funcptr) {
-    t_builtin2 *p = allocator_alloc(a, sizeof(t_builtin2));
-    *p = funcptr;
-    value ret = (uint64_t)p | TYPE_BUILTIN2;
+    struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
+    p->funcptr2 = funcptr;
+    p->arity = 2;
+    value ret = (uint64_t)p | TYPE_BUILTIN;
     return ret;
 }
 
 t_builtin2 builtin2_ptr(value v) {
-    assert(value_type(v) == TYPE_BUILTIN2);
-    t_builtin2 *p = (t_builtin2*)value_to_cell(v);
-    return *p;
+    assert(value_type(v) == TYPE_BUILTIN);
+    struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
+    assert(p->arity == 2);
+    return p->funcptr2;
 }
 
 value make_builtin3(struct allocator *a, t_builtin3 funcptr) {
-    t_builtin3 *p = allocator_alloc(a, sizeof(t_builtin3));
-    *p = funcptr;
-    value ret = (uint64_t)p | TYPE_BUILTIN3;
+    struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
+    p->funcptr3 = funcptr;
+    p->arity = 3;
+    value ret = (uint64_t)p | TYPE_BUILTIN;
     return ret;
 }
 
 t_builtin3 builtin3_ptr(value v) {
-    assert(value_type(v) == TYPE_BUILTIN3);
-    t_builtin3 *p = (t_builtin3*)value_to_cell(v);
-    return *p;
+    assert(value_type(v) == TYPE_BUILTIN);
+    struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
+    assert(p->arity == 3);
+    return p->funcptr3;
 }
 
 value make_vector(struct allocator *a, int length, value fill) {

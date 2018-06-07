@@ -393,43 +393,49 @@ tailcall_label:
                         return VALUE_NIL;
                 }
             }
-            else if (value_type(op) == TYPE_BUILTIN1) {
-                t_builtin1 funcptr = builtin1_ptr(op);
-                value pos_args[1];
-                int arg_count = interp_collect_list(cdr(f->expr), 1, pos_args);
-                if (arg_count != 1) {
-                    fprintf(stderr, "Arity error in application of builtin: expected 1 args but got %i\n",
-                        arg_count);
+            else if (value_type(op) == TYPE_BUILTIN) {
+                if (builtin_arity(op) == 1) {
+                    t_builtin1 funcptr = builtin1_ptr(op);
+                    value pos_args[1];
+                    int arg_count = interp_collect_list(cdr(f->expr), 1, pos_args);
+                    if (arg_count != 1) {
+                        fprintf(stderr, "Arity error in application of builtin: expected 1 args but got %i\n",
+                            arg_count);
+                        return VALUE_NIL;
+                    }
+                    return funcptr(i->alloc, interp_eval_env(i, f, pos_args[0], f->env));
+                }
+                else if (builtin_arity(op) == 2) {
+                    t_builtin2 funcptr = builtin2_ptr(op);
+                    value pos_args[2];
+                    int arg_count = interp_collect_list(cdr(f->expr), 2, pos_args);
+                    if (arg_count != 2) {
+                        fprintf(stderr, "Arity error in application of builtin: expected 2 args but got %i\n",
+                            arg_count);
+                        return VALUE_NIL;
+                    }
+                    f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
+                    f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
+                    return funcptr(i->alloc, f->locals[2], f->locals[3]);
+                }
+                else if (builtin_arity(op) == 3) {
+                    t_builtin3 funcptr = builtin3_ptr(op);
+                    value pos_args[3];
+                    int arg_count = interp_collect_list(cdr(f->expr), 3, pos_args);
+                    if (arg_count != 3) {
+                        fprintf(stderr, "Arity error in application of builtin: expected 3 args but got %i\n",
+                            arg_count);
+                        return VALUE_NIL;
+                    }
+                    f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
+                    f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
+                    f->locals[4] = interp_eval_env(i, f, pos_args[2], f->env);
+                    return funcptr(i->alloc, f->locals[2], f->locals[3], f->locals[4]);
+                }
+                else {
+                    fprintf(stderr, "Unsupported builtin arity %d\n", builtin_arity(op));
                     return VALUE_NIL;
                 }
-                return funcptr(i->alloc, interp_eval_env(i, f, pos_args[0], f->env));
-            }
-            else if (value_type(op) == TYPE_BUILTIN2) {
-                t_builtin2 funcptr = builtin2_ptr(op);
-                value pos_args[2];
-                int arg_count = interp_collect_list(cdr(f->expr), 2, pos_args);
-                if (arg_count != 2) {
-                    fprintf(stderr, "Arity error in application of builtin: expected 2 args but got %i\n",
-                        arg_count);
-                    return VALUE_NIL;
-                }
-                f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
-                f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
-                return funcptr(i->alloc, f->locals[2], f->locals[3]);
-            }
-            else if (value_type(op) == TYPE_BUILTIN3) {
-                t_builtin3 funcptr = builtin3_ptr(op);
-                value pos_args[3];
-                int arg_count = interp_collect_list(cdr(f->expr), 3, pos_args);
-                if (arg_count != 3) {
-                    fprintf(stderr, "Arity error in application of builtin: expected 3 args but got %i\n",
-                        arg_count);
-                    return VALUE_NIL;
-                }
-                f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
-                f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
-                f->locals[4] = interp_eval_env(i, f, pos_args[2], f->env);
-                return funcptr(i->alloc, f->locals[2], f->locals[3], f->locals[4]);
             }
             else if (value_type(op) == TYPE_INTERP_LAMBDA) {
                 struct interp_lambda *lambda = value_to_interp_lambda(op);

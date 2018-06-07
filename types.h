@@ -49,14 +49,11 @@
  * three bits are masked off) of the heap cell. We have a set of non-immediate 
  * types:
  *   000_ - symbol
- *   001_ - cons
- *   010_ - builtin1 (stuff callable from scheme but written in C, arity 1
- *                   the pointer part is the address of the function to call)
- *   011_ - builtin2
- *   100_ - builtin3
- *   101_ - interpreter lambda
- *   110_ - vector
- *   111_ - string
+ *   001_ - string
+ *   010_ - cons cell
+ *   011_ - builtin (stuff callable from scheme but written in C, with arity)
+ *   100_ - interpreter lambda
+ *   101_ - vector
  *
  * XXX will need boxes ?
  *  */
@@ -84,13 +81,11 @@ typedef uint64_t value;
 #define TYPE_SHORT_STRING     0b1000
 
 #define TYPE_SYMBOL           0b0001
-#define TYPE_CONS             0b0011
-#define TYPE_BUILTIN1         0b0101
-#define TYPE_BUILTIN2         0b0111
-#define TYPE_BUILTIN3         0b1001
-#define TYPE_INTERP_LAMBDA    0b1011
-#define TYPE_VECTOR           0b1101
-#define TYPE_STRING           0b1111
+#define TYPE_STRING           0b0011
+#define TYPE_CONS             0b0101
+#define TYPE_BUILTIN          0b0111
+#define TYPE_INTERP_LAMBDA    0b1001
+#define TYPE_VECTOR           0b1011
 
 // XXX we should not need a nil, but then we need to make sure there are no CONS
 // that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
@@ -163,6 +158,8 @@ char* value_to_string(value *s);
 
 /* Builtins
  * */
+
+int builtin_arity(value);
 
 typedef value (*t_builtin1)(struct allocator*, value);
 typedef value (*t_builtin2)(struct allocator*, value, value);
