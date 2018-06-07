@@ -266,7 +266,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 
     gc->a->pressure = 0;
 
-    int roots = gc->list->count;
+//    int roots = gc->list->count;
     int visited = 0;
     int reclaimed = 0;
 
