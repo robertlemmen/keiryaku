@@ -59,6 +59,12 @@
  * XXX will need boxes ?
  *  */
 
+// XXX we have to make sure that we never have CONS entries that are empty,
+// otherwise we need to support EMPTY_LIST == CONS. this might mean we can get
+// rid of NIL as well
+
+// XXX clever restructuring of this could mean EMPTY_LIST = 0 
+
 #if __SIZEOF_POINTER__ != 8
 #error "This code targets 64-bit systems only"
 #endif

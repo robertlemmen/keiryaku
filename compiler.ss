@@ -149,3 +149,24 @@
                 (list-vec-copy-rec vals rv 0)
                 rv)))))
 
+(define _assg
+    (lambda (obj alist comp)
+        (if (null? alist)
+            #f
+            (if (comp obj (caar alist))
+                (car alist)
+                (assq obj (cdr alist))))))
+
+(define assq
+    (lambda (obj alist)
+        (_assg obj alist eq?)))
+
+(define assv
+    (lambda (obj alist)
+        (_assg obj alist eqv?)))
+
+; XXX assoc needs "compare" case
+(define assoc
+    (lambda (obj alist)
+        (_assg obj alist equal?)))
+
