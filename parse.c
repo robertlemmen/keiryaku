@@ -488,9 +488,8 @@ int parser_consume(struct parser *p, char *data, bool interactive) {
 
 void parser_eof(struct parser *p) {
     parser_parse(p, P_EOF, 0, NULL, false);
-    // XXX for now we run a GC cycle after each file, which of course won't work
-    // for long-running programs. if we run GC from interp_eval, we need to add
-    // values on the stack to the gc roots as well...
+    // XXX is this still usefule now that we GC during runtime? we should do it
+    // at end of program though, so we can find memory leaks
     interp_gc(p->interp);
 }
 

@@ -15,8 +15,6 @@
 
 #define BUFSIZE 4096
 
-// XXX getopt for ags, e.g. not to load base env and/or compiler
-
 static struct option long_options[] = {
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'v'},

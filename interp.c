@@ -7,7 +7,6 @@
 
 #include "builtins.h"
 
-// XXX when these get recycles, we should ref_dec the contents
 // XXX could be more efficient structure rather than linked list
 struct interp_env_entry {
     value name;
@@ -169,14 +168,6 @@ int interp_count_nonlist(value expr, bool *well_formed) {
     return ret;
 }
 
-/* XXX todo towards GC during run:
- * - traverse call frames in GC
- * - tune NUM_LOCALS and check call_frame size
- * - run GC when pressure builds, not after evaluating
- * - check infinite sum, should now run in constant memory
- *   */
-
-
 #define NUM_LOCALS  5
 
 struct call_frame {
@@ -190,7 +181,6 @@ struct call_frame {
 inline __attribute__((always_inline)) 
 struct call_frame* call_frame_new(struct allocator *alloc, struct call_frame *outer, 
         value expr, struct interp_env *env) {
-    // XXX eh? should allocate on the stack!
     struct call_frame *ret = alloca(sizeof(struct call_frame));
     ret->expr = expr;
     ret->env = env;
@@ -299,7 +289,6 @@ tailcall_label:
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_LAMBDA:;
-                        // XXX we need to support half-variadics as well
                         struct interp_lambda *lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda));
                         lambda->env = f->env;
                         arg_count = interp_collect_list(args, 2, pos_args);
@@ -475,7 +464,7 @@ tailcall_label:
                     f->locals[1] = VALUE_EMPTY_LIST;
                     value out_ca = VALUE_NIL;
                     value current_arg = f->locals[2];
-                    // XXX some of this list-building is nocer in the variadic
+                    // XXX some of this list-building is nicer in the variadic
                     // builtin case below
                     for (int idx = ax; idx < application_arity; idx++) {
                         f->locals[2] = make_cons(i->alloc, interp_eval_env(i, f, car(current_arg), f->env), VALUE_EMPTY_LIST);

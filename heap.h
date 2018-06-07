@@ -74,5 +74,4 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, uint64_t v);
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m);
 void allocator_gc_perform(struct allocator_gc_ctx *gc);
 
-
 #endif /* HEAP_H */
