@@ -1,6 +1,7 @@
 - equals? should support cyclic structres, requires set-cdr!
 - implement case, assv and friends, towards 02-chibi-derived 
 - even more tests from chibi source
+- support #true and #false long forms in parser
 - properly scan heap for free block when request > 1 cell
 - clean up empty arenas at end, to find stuff that we failed to collect
 - restructure immediate representation

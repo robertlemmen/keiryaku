@@ -67,6 +67,8 @@
     (lambda (ex _compile)
         (if (pair? ex)
             (if (null? (cdr ex))
+; XXX I bet the let needs to be in the emitted syntax, not to call this twice.
+; same for 'or' below
                 (let [(cex (_compile (car ex)))]
                     (list 'if cex cex #f))
                 (list 'if (_compile (car ex)) (_emit-and-case (cdr ex) _compile) #f))
@@ -186,3 +188,11 @@
     (lambda (obj alist)
         (_assg obj alist equal?)))
 
+(define boolean=? 
+    (lambda (a b . m)
+; XXX does not test that they are booleans at the moment
+        (if (and (pair? m) (not (null? (car m))))
+            (if (or (and a b) (and (not a) (not b)))
+                (apply boolean=? (cons b (cons (car m) (cdr m))))
+                #f)
+            (or (and a b) (and (not a) (not b))))))

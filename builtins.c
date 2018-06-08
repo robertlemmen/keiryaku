@@ -229,6 +229,11 @@ value builtin_vector_set(struct allocator *alloc, value v, value p, value i) {
     return VALUE_NIL;
 }
 
+value builtin_boolean(struct allocator *alloc, value v) {
+    return ((v == VALUE_TRUE) || (v == VALUE_FALSE))
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
 value builtin_compile_stub(struct allocator *alloc, value v) {
     return v;
 }
@@ -263,5 +268,6 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "vector-length"), make_builtin1(alloc, &builtin_vector_length));
     env_bind(alloc, env, make_symbol(alloc, "vector-ref"), make_builtin2(alloc, &builtin_vector_ref));
     env_bind(alloc, env, make_symbol(alloc, "vector-set!"), make_builtin3(alloc, &builtin_vector_set));
+    env_bind(alloc, env, make_symbol(alloc, "boolean?"), make_builtin1(alloc, &builtin_boolean));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
 }
