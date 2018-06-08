@@ -63,6 +63,24 @@
                 (_compile (cadar ex))
                 (list 'if (_compile (caar ex)) (list 'begin (_compile (cadar ex))) (_emit-cond-case (cdr ex) _compile)) ))))
 
+(define _emit-and-case
+    (lambda (ex _compile)
+        (if (pair? ex)
+            (if (null? (cdr ex))
+                (let [(cex (_compile (car ex)))]
+                    (list 'if cex cex #f))
+                (list 'if (_compile (car ex)) (_emit-and-case (cdr ex) _compile) #f))
+            ex)))
+
+(define _emit-or-case
+    (lambda (ex _compile)
+        (if (pair? ex)
+            (if (null? (cdr ex))
+                (let [(cex (_compile (car ex)))]
+                    (list 'if cex cex #f))
+                (list 'if (_compile (car ex)) #t (_emit-and-case (cdr ex) _compile)))
+            ex)))
+
 (define sub1
     (lambda (n)
         (- n 1)))
@@ -75,16 +93,14 @@
     (let [
         (compile-and
             (lambda (ex _compile)
-                (list 'if (_compile (car ex))
-                        (list 'if (_compile (cadr ex)) 
-                                #t
-                                #f)
-                        #f) ))
+                (if (null? ex)
+                    #t
+                    (_emit-and-case ex _compile))))
         (compile-or
             (lambda (ex _compile)
-                (list 'if (_compile (car ex)) 
-                        #t
-                        (list 'if (_compile (cadr ex)) #t #f) )))
+                (if (null? ex)
+                    #f
+                    (_emit-or-case ex _compile))))
         (compile-not
             (lambda (ex _compile)
                 (list 'if (_compile (car ex)) #f #t) ))

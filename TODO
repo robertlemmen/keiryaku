@@ -1,5 +1,5 @@
 - equals? should support cyclic structres, requires set-cdr!
-- implement case, assv and friends, variadic or/and. towards 02-chibi-derived 
+- implement case, assv and friends, towards 02-chibi-derived 
 - even more tests from chibi source
 - properly scan heap for free block when request > 1 cell
 - clean up empty arenas at end, to find stuff that we failed to collect

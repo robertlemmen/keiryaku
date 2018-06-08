@@ -104,8 +104,8 @@ typedef uint64_t value;
 
 #define value_is_special(x) (((x) & 0b10001111) == 0b10000000)
 
-/* values are considered true if they are not #f or an empty list */
-#define value_is_true(x) (((x) & 0b11101111) != VALUE_FALSE)
+// XXX we do not need this anymore, clean up
+#define value_is_true(x) ((x) != VALUE_FALSE)
 
 #define intval(x) ((int32_t)((x) >> 32))
 #define make_int(a, x) (((uint64_t)(x) << 32) | TYPE_INT)
