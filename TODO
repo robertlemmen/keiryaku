@@ -1,3 +1,4 @@
+- turn push-=parsing into proper REPL, towards (include ...)
 - equals? should support cyclic structres, also dump_values and list?
 - equals? needs implementation for vectors
 - implement case, assv and friends, towards 02-chibi-derived 

@@ -118,6 +118,7 @@ struct interp* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"), VALUE_SP_LET);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"), VALUE_SP_APPLY);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"), VALUE_SP_SET);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"), VALUE_SP_EVAL);
 
     return ret;
 }
@@ -417,6 +418,16 @@ tailcall_label:
                             fprintf(stderr, "Error in application of special 'set!': binding for symbol '%s' not found\n", value_to_symbol(&pos_args[0]));
                         }
                         return VALUE_NIL;
+                        break;
+                    case VALUE_SP_EVAL:
+                        arg_count = interp_collect_list(args, 1, pos_args);
+                        if (arg_count != 1) {
+                            fprintf(stderr, "Arity error in application of special 'eval': expected 1 args but got %i\n",
+                                arg_count);
+                            return VALUE_NIL;
+                        }
+                        f->expr = interp_eval_env(i, f, pos_args[0], f->env);
+                        goto tailcall_label;
                         break;
                     default:
                         fprintf(stderr, "Unknown special 0x%lX\n", special);

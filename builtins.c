@@ -268,6 +268,7 @@ tailcall_label:
 }
 
 value builtin_compile_stub(struct allocator *alloc, value v) {
+    // XXX warrants explanation
     return v;
 }
 

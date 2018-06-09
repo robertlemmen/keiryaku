@@ -32,14 +32,15 @@
  *
  * 'Specials' are enums, but all have the lowest enum bit set to make testing for 
  * them easier:
- *   0001____ - 'If' Special
- *   0011____ - 'Define' Special
- *   0101____ - 'Lambda' Special
- *   0111____ - 'Begin' Special
- *   1001____ - 'Quote' Special
- *   1011____ - 'Let' Special
- *   1101____ - 'Apply' Special
- *   1111____ - 'Set' Special
+ *   00001____ - 'If' Special
+ *   00011____ - 'Define' Special
+ *   00101____ - 'Lambda' Special
+ *   00111____ - 'Begin' Special
+ *   01001____ - 'Quote' Special
+ *   01011____ - 'Let' Special
+ *   01101____ - 'Apply' Special
+ *   01111____ - 'Set' Special
+ *   10001____ - 'Eval' Special
  *
  * this means that enumerated "special" values can be compared for equality 
  * directly, by comparing the value bitwise.
@@ -89,19 +90,20 @@ typedef uint64_t value;
 
 // XXX we should not need a nil, but then we need to make sure there are no CONS
 // that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
-#define VALUE_NIL         0b00000000
-#define VALUE_TRUE        0b00100000
-#define VALUE_FALSE       0b01000000
-#define VALUE_EMPTY_LIST  0b01100000
+#define VALUE_NIL          0b0000000
+#define VALUE_TRUE         0b0100000
+#define VALUE_FALSE        0b1000000
+#define VALUE_EMPTY_LIST   0b1100000
 
-#define VALUE_SP_IF       0b00010000
-#define VALUE_SP_DEFINE   0b00110000
-#define VALUE_SP_LAMBDA   0b01010000
-#define VALUE_SP_BEGIN    0b01110000
-#define VALUE_SP_QUOTE    0b10010000
-#define VALUE_SP_LET      0b10110000
-#define VALUE_SP_APPLY    0b11010000
-#define VALUE_SP_SET      0b11110000
+#define VALUE_SP_IF      0b000010000
+#define VALUE_SP_DEFINE  0b000110000
+#define VALUE_SP_LAMBDA  0b001010000
+#define VALUE_SP_BEGIN   0b001110000
+#define VALUE_SP_QUOTE   0b010010000
+#define VALUE_SP_LET     0b010110000
+#define VALUE_SP_APPLY   0b011010000
+#define VALUE_SP_SET     0b011110000
+#define VALUE_SP_EVAL    0b100010000
 
 #define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 
