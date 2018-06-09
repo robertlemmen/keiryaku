@@ -19,7 +19,7 @@ struct interp_env {
     struct interp_env_entry *entries;
 };
 
-struct interp_ctx {
+struct interp {
     struct allocator *alloc;
     struct interp_env *top_env;
     struct call_frame *current_frame;
@@ -103,8 +103,8 @@ bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, valu
     return false;
 }
 
-struct interp_ctx* interp_new(struct allocator *alloc) {
-    struct interp_ctx *ret = malloc(sizeof(struct interp_ctx));
+struct interp* interp_new(struct allocator *alloc) {
+    struct interp *ret = malloc(sizeof(struct interp));
     ret->alloc = alloc;
     ret->top_env = env_new(ret->alloc, NULL);
 
@@ -122,7 +122,7 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     return ret;
 }
 
-void interp_free(struct interp_ctx *i) {
+void interp_free(struct interp *i) {
     assert(i != NULL);
     free(i);
 }
@@ -211,10 +211,10 @@ struct call_frame* call_frame_new(struct allocator *alloc, struct call_frame *ou
     return ret;
 }
 
-value interp_eval_env_int(struct interp_ctx *i, struct call_frame *f);
+value interp_eval_env_int(struct interp *i, struct call_frame *f);
 
 // XXX can we put a struct in the args rather than a pointer to it?
-value interp_eval_env(struct interp_ctx *i, struct call_frame *caller_frame, value expr, struct interp_env *env) {
+value interp_eval_env(struct interp *i, struct call_frame *caller_frame, value expr, struct interp_env *env) {
     i->current_frame = call_frame_new(i->alloc, caller_frame, expr, env);
     // XXX may be cheaper to have bogus outer frame than to check all the
     // time...
@@ -227,7 +227,7 @@ value interp_eval_env(struct interp_ctx *i, struct call_frame *caller_frame, val
 }
 
 inline __attribute__((always_inline))
-value interp_eval_env_int(struct interp_ctx *i, struct call_frame *f) {
+value interp_eval_env_int(struct interp *i, struct call_frame *f) {
     assert(i != NULL);
 
 tailcall_label:
@@ -588,11 +588,11 @@ void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f)
     }
 }
 
-value interp_eval(struct interp_ctx *i, value expr) {
+value interp_eval(struct interp *i, value expr) {
     return interp_eval_env(i, NULL, expr, i->top_env);
 }
 
-void interp_gc(struct interp_ctx *i) {
+void interp_gc(struct interp *i) {
     struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
     interp_add_gc_root_env(gc, i->top_env);
     interp_add_gc_root_frame(gc, i->current_frame);

@@ -10,6 +10,7 @@
 #include "linenoise/linenoise.c"
 #include "heap.h"
 #include "parse.h"
+#include "interp.h"
 #include "version.h"
 #include "global.h"
 
@@ -107,7 +108,8 @@ int main(int argc, char **argv) {
     }
 
     struct allocator *a = allocator_new();
-    struct parser *p = parser_new(a);
+    struct interp *i = interp_new(a);
+    struct parser *p = parser_new(a, i);
 
     if (load_compiler) {
         consume_file(p, "compiler.ss");
@@ -144,6 +146,7 @@ int main(int argc, char **argv) {
     }
 
     parser_free(p);
+    interp_free(i);
     allocator_free(a);
 
     if (history_file) {

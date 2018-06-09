@@ -13,7 +13,7 @@ struct parser {
     struct allocator *alloc;
     struct expr_lnk *exp_stack_top;
     // XXX perhaps should be passed in through constructor...
-    struct interp_ctx *interp;
+    struct interp *interp;
     int tokenizer_state;
 };
 
@@ -464,18 +464,17 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
     return 0;
 }
 
-struct parser* parser_new(struct allocator *alloc) {
+struct parser* parser_new(struct allocator *alloc, struct interp *i) {
     struct parser *ret = malloc(sizeof(struct parser));
     ret->alloc = alloc;
     ret->tokenizer_state = S_INIT;
     ret->exp_stack_top = NULL;
-    ret->interp = interp_new(alloc);
+    ret->interp = i;
     return ret;
 }
 
 void parser_free(struct parser *p) {
     assert(p != NULL);
-    interp_free(p->interp);
     free(p);
 }
 
