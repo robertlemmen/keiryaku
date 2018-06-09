@@ -55,6 +55,70 @@
     (lambda (arg)
         (cdr (cdr (cdr arg)))))
 
+(define caaaar
+    (lambda (arg)
+        (car (car (car (car arg))))))
+
+(define caaadr
+    (lambda (arg)
+        (car (car (car (cdr arg))))))
+
+(define caadar
+    (lambda (arg)
+        (car (car (cdr (car arg))))))
+
+(define caaddr
+    (lambda (arg)
+        (car (car (cdr (cdr arg))))))
+
+(define cadaar
+    (lambda (arg)
+        (car (cdr (car (car arg))))))
+
+(define cadadr
+    (lambda (arg)
+        (car (cdr (car (cdr arg))))))
+
+(define caddar
+    (lambda (arg)
+        (car (cdr (cdr (car arg))))))
+
+(define cadddr
+    (lambda (arg)
+        (car (cdr (cdr (cdr arg))))))
+
+(define cdaaar
+    (lambda (arg)
+        (cdr (car (car (car arg))))))
+
+(define cdaadr
+    (lambda (arg)
+        (cdr (car (car (cdr arg))))))
+
+(define cdadar
+    (lambda (arg)
+        (cdr (car (cdr (car arg))))))
+
+(define cdaddr
+    (lambda (arg)
+        (cdr (car (cdr (cdr arg))))))
+
+(define cddaar
+    (lambda (arg)
+        (cdr (cdr (car (car arg))))))
+
+(define cddadr
+    (lambda (arg)
+        (cdr (cdr (car (cdr arg))))))
+
+(define cdddar
+    (lambda (arg)
+        (cdr (cdr (cdr (car arg))))))
+
+(define cddddr
+    (lambda (arg)
+        (cdr (cdr (cdr (cdr arg))))))
+
 (define _emit-cond-case
     (lambda (ex _compile) 
         (if (null? ex)
