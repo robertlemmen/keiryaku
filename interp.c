@@ -85,6 +85,24 @@ void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, val
     }
 }
 
+bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
+    assert(value_is_symbol(symbol));
+
+    while (env) {
+        struct interp_env_entry *ee = env->entries;
+        while (ee) {
+            assert(value_is_symbol(ee->name));
+            if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
+                ee->value = value;
+                return true;
+            }
+            ee = ee->next;
+        }
+        env = env->outer;
+    }
+    return false;
+}
+
 struct interp_ctx* interp_new(struct allocator *alloc) {
     struct interp_ctx *ret = malloc(sizeof(struct interp_ctx));
     ret->alloc = alloc;
@@ -99,6 +117,7 @@ struct interp_ctx* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "quote"), VALUE_SP_QUOTE);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"), VALUE_SP_LET);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"), VALUE_SP_APPLY);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"), VALUE_SP_SET);
 
     return ret;
 }
@@ -376,6 +395,28 @@ tailcall_label:
                         f->expr = make_cons(i->alloc, pos_args[0], 
                             interp_eval_env(i, f, pos_args[1], f->env));
                         goto tailcall_label;
+                        break;
+                    case VALUE_SP_SET:
+                        // XXX perhaps this should not be allowed to redefined
+                        // entries in the top_env
+                        arg_count = interp_collect_list(args, 2, pos_args);
+                        if (arg_count != 2) {
+                            fprintf(stderr, "Arity error in application of special 'set!': expected 2 args but got %i\n",
+                                arg_count);
+                            return VALUE_NIL;
+                        }
+                        // XXX do we need to eval it first?
+                        if (!value_is_symbol(pos_args[0])) {
+                            fprintf(stderr, "Type error in application of special 'set!': expected a symbol args but got %li\n",
+                                // XXX we should have a textual type, just for error
+                                // repoting and logging
+                                value_type(pos_args[0]));
+                            return VALUE_NIL;
+                        }
+                        if (!env_set(i->alloc, f->env, pos_args[0], interp_eval_env(i, f, pos_args[1], f->env))) {
+                            fprintf(stderr, "Error in application of special 'set!': binding for symbol '%s' not found\n", value_to_symbol(&pos_args[0]));
+                        }
+                        return VALUE_NIL;
                         break;
                     default:
                         fprintf(stderr, "Unknown special 0x%lX\n", special);
