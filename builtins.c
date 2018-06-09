@@ -234,6 +234,33 @@ value builtin_boolean(struct allocator *alloc, value v) {
         ? VALUE_TRUE
         : VALUE_FALSE;
 }
+
+value builtin_set_car(struct allocator *alloc, value p, value v) {
+    assert(value_type(p) == TYPE_CONS);
+    set_car(p, v);
+    return VALUE_NIL;
+}
+
+value builtin_set_cdr(struct allocator *alloc, value p, value v) {
+    assert(value_type(p) == TYPE_CONS);
+    set_cdr(p, v);
+    return VALUE_NIL;
+}
+
+value builtin_list(struct allocator *alloc, value l) {
+tailcall_label:
+    if (l == VALUE_EMPTY_LIST) {
+        return VALUE_TRUE;
+    }
+    else if (value_type(l) == TYPE_CONS) {
+        l = cdr(l);
+        goto tailcall_label;
+    }
+    else {
+        return VALUE_FALSE;
+    }
+}
+
 value builtin_compile_stub(struct allocator *alloc, value v) {
     return v;
 }
@@ -269,5 +296,8 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "vector-ref"), make_builtin2(alloc, &builtin_vector_ref));
     env_bind(alloc, env, make_symbol(alloc, "vector-set!"), make_builtin3(alloc, &builtin_vector_set));
     env_bind(alloc, env, make_symbol(alloc, "boolean?"), make_builtin1(alloc, &builtin_boolean));
+    env_bind(alloc, env, make_symbol(alloc, "set-car!"), make_builtin2(alloc, &builtin_set_car));
+    env_bind(alloc, env, make_symbol(alloc, "set-cdr!"), make_builtin2(alloc, &builtin_set_cdr));
+    env_bind(alloc, env, make_symbol(alloc, "list?"), make_builtin1(alloc, &builtin_list));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
 }

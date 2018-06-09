@@ -1,4 +1,4 @@
-- equals? should support cyclic structres, requires set-cdr!
+- equals? should support cyclic structres, also dump_values and list?
 - implement case, assv and friends, towards 02-chibi-derived 
 - even more tests from chibi source
 - support #true and #false long forms in parser
@@ -6,3 +6,4 @@
 - clean up empty arenas at end, to find stuff that we failed to collect
 - restructure immediate representation
 - symbols could be flyweights
+- better gc with nursery, bump allocator and forwarding pointers
