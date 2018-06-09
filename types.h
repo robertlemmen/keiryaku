@@ -26,20 +26,19 @@
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
  *   0000____ - Nil (internal, not usable in the scheme layer)
- *   0001____ - True
- *   0010____ - False
- *   0011____ - Empty List
+ *   0010____ - True
+ *   0100____ - False
+ *   0110____ - Empty List
  *
- * 'Specials' all have the fourth bit of that set, to make testing for them
- * easier:
- * XXX would be nicer if this was the lowest-order bit
- *   1000____ - 'If' Special
- *   1001____ - 'Define' Special
- *   1010____ - 'Lambda' Special
- *   1011____ - 'Begin' Special
- *   1100____ - 'Quote' Special
- *   1101____ - 'Let' Special
- *   1110____ - 'Apply' Special
+ * 'Specials' are enums, but all have the lowest enum bit set to make testing for 
+ * them easier:
+ *   0001____ - 'If' Special
+ *   0011____ - 'Define' Special
+ *   0101____ - 'Lambda' Special
+ *   0111____ - 'Begin' Special
+ *   1001____ - 'Quote' Special
+ *   1011____ - 'Let' Special
+ *   1101____ - 'Apply' Special
  *   1111____ - 'Set' Special
  *
  * this means that enumerated "special" values can be compared for equality 
@@ -91,20 +90,20 @@ typedef uint64_t value;
 // XXX we should not need a nil, but then we need to make sure there are no CONS
 // that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
 #define VALUE_NIL         0b00000000
-#define VALUE_TRUE        0b00010000
-#define VALUE_FALSE       0b00100000
-#define VALUE_EMPTY_LIST  0b00110000
+#define VALUE_TRUE        0b00100000
+#define VALUE_FALSE       0b01000000
+#define VALUE_EMPTY_LIST  0b01100000
 
-#define VALUE_SP_IF       0b10000000
-#define VALUE_SP_DEFINE   0b10010000
-#define VALUE_SP_LAMBDA   0b10100000
-#define VALUE_SP_BEGIN    0b10110000
-#define VALUE_SP_QUOTE    0b11000000
-#define VALUE_SP_LET      0b11010000
-#define VALUE_SP_APPLY    0b11100000
+#define VALUE_SP_IF       0b00010000
+#define VALUE_SP_DEFINE   0b00110000
+#define VALUE_SP_LAMBDA   0b01010000
+#define VALUE_SP_BEGIN    0b01110000
+#define VALUE_SP_QUOTE    0b10010000
+#define VALUE_SP_LET      0b10110000
+#define VALUE_SP_APPLY    0b11010000
 #define VALUE_SP_SET      0b11110000
 
-#define value_is_special(x) (((x) & 0b10001111) == 0b10000000)
+#define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 
 // XXX we do not need this anymore, clean up
 #define value_is_true(x) ((x) != VALUE_FALSE)

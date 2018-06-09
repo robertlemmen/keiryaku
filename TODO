@@ -1,4 +1,5 @@
 - equals? should support cyclic structres, also dump_values and list?
+- equals? needs implementation for vectors
 - implement case, assv and friends, towards 02-chibi-derived 
 - even more tests from chibi source
 - support #true and #false long forms in parser
