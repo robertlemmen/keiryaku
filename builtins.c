@@ -167,6 +167,12 @@ value builtin_string(struct allocator *alloc, value v) {
         : VALUE_FALSE;
 }
 
+value builtin_symbol(struct allocator *alloc, value v) {
+    return value_is_symbol(v)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
 value builtin_string_length(struct allocator *alloc, value v) {
     assert(value_is_string(v));
     return make_int(alloc, strlen(value_to_string(&v)));
@@ -287,6 +293,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "null?"), make_builtin1(alloc, &builtin_null));
     env_bind(alloc, env, make_symbol(alloc, "number?"), make_builtin1(alloc, &builtin_number));
     env_bind(alloc, env, make_symbol(alloc, "string?"), make_builtin1(alloc, &builtin_string));
+    env_bind(alloc, env, make_symbol(alloc, "symbol?"), make_builtin1(alloc, &builtin_symbol));
     env_bind(alloc, env, make_symbol(alloc, "string-length"), make_builtin1(alloc, &builtin_string_length));
     env_bind(alloc, env, make_symbol(alloc, "string=?"), make_builtin2(alloc, &builtin_string_eq));
     env_bind(alloc, env, make_symbol(alloc, "symbol=?"), make_builtin2(alloc, &builtin_symbol_eq));
