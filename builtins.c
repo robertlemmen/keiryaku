@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "interp.h"
+#include "ports.h"
 
 value builtin_plus(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
@@ -267,6 +268,46 @@ tailcall_label:
     }
 }
 
+value builtin_port(struct allocator *alloc, value v) {
+    return (value_type(v) == TYPE_PORT)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_input_port(struct allocator *alloc, value v) {
+    return port_in(v)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_output_port(struct allocator *alloc, value v) {
+    return port_out(v)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_text_port(struct allocator *alloc, value v) {
+    return port_text(v)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_binary_port(struct allocator *alloc, value v) {
+    return port_binary(v)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_newline(struct allocator *alloc, value p) {
+    port_newline(p);
+    return VALUE_NIL;
+}
+
+value builtin_display(struct allocator *alloc, value o, value p) {
+    port_display(p, o);
+    return VALUE_NIL;
+}
+
 value builtin_compile_stub(struct allocator *alloc, value v) {
     // XXX warrants explanation
     return v;
@@ -307,5 +348,12 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "set-car!"), make_builtin2(alloc, &builtin_set_car));
     env_bind(alloc, env, make_symbol(alloc, "set-cdr!"), make_builtin2(alloc, &builtin_set_cdr));
     env_bind(alloc, env, make_symbol(alloc, "list?"), make_builtin1(alloc, &builtin_list));
+    env_bind(alloc, env, make_symbol(alloc, "port?"), make_builtin1(alloc, &builtin_port));
+    env_bind(alloc, env, make_symbol(alloc, "input-port?"), make_builtin1(alloc, &builtin_input_port));
+    env_bind(alloc, env, make_symbol(alloc, "output-port?"), make_builtin1(alloc, &builtin_output_port));
+    env_bind(alloc, env, make_symbol(alloc, "text-port?"), make_builtin1(alloc, &builtin_text_port));
+    env_bind(alloc, env, make_symbol(alloc, "binary-port?"), make_builtin1(alloc, &builtin_binary_port));
+    env_bind(alloc, env, make_symbol(alloc, "newline"), make_builtin1(alloc, &builtin_newline));
+    env_bind(alloc, env, make_symbol(alloc, "display"), make_builtin2(alloc, &builtin_display));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
 }

@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include "builtins.h"
+#include "heap.h"
 
 // XXX could be more efficient structure rather than linked list
 struct interp_env_entry {
@@ -121,6 +122,10 @@ struct interp* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"), VALUE_SP_EVAL);
 
     return ret;
+}
+
+struct interp_env* interp_top_env(struct interp *i) {
+    return i->top_env;
 }
 
 void interp_free(struct interp *i) {

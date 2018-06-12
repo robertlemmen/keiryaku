@@ -2,8 +2,8 @@
 #define TYPES_H
 
 #include <stdint.h>
-
-#include "heap.h"
+// XXX just for dump_value bewlo, which needs to move to ports
+#include <stdio.h>
 
 /* Value Representation
  *
@@ -55,6 +55,10 @@
  *   011_ - builtin (stuff callable from scheme but written in C, with arity)
  *   100_ - interpreter lambda
  *   101_ - vector
+ *   110_ - port
+ *
+ *   XXX will need a "other" non-immediate where the actual type is only stored
+ *   on the heap, sadly
  *
  * XXX will need boxes ?
  *  */
@@ -64,6 +68,9 @@
 // rid of NIL as well
 
 // XXX clever restructuring of this could mean EMPTY_LIST = 0 
+
+struct allocator;
+struct allocator_gc_ctx;
 
 #if __SIZEOF_POINTER__ != 8
 #error "This code targets 64-bit systems only"
@@ -87,6 +94,7 @@ typedef uint64_t value;
 #define TYPE_BUILTIN          0b0111
 #define TYPE_INTERP_LAMBDA    0b1001
 #define TYPE_VECTOR           0b1011
+#define TYPE_PORT             0b1101
 
 // XXX we should not need a nil, but then we need to make sure there are no CONS
 // that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
@@ -201,6 +209,6 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v);
  * functions from the scheme layer should be used
  * */
 
-void dump_value(value v);
+void dump_value(value v, FILE *f);
 
 #endif /* TYPES_H */

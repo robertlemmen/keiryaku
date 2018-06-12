@@ -14,6 +14,9 @@
 #include "version.h"
 #include "global.h"
 
+// XXX experiments
+#include "ports.h"
+
 #define BUFSIZE 4096
 
 static struct option long_options[] = {
@@ -110,6 +113,17 @@ int main(int argc, char **argv) {
     struct allocator *a = allocator_new();
     struct interp *i = interp_new(a);
     struct parser *p = parser_new(a, i);
+
+    // XXX debug/experiments
+    env_bind(a, interp_top_env(i), 
+        make_symbol(a, "stdin"),
+        make_port(a, stdin, true, false, true, false));
+    env_bind(a, interp_top_env(i), 
+        make_symbol(a, "stdout"),
+        make_port(a, stdout, false, true, true, false));
+    env_bind(a, interp_top_env(i), 
+        make_symbol(a, "stderr"),
+        make_port(a, stderr, false, true, true, false));
 
     if (load_compiler) {
         consume_file(p, "compiler.ss");

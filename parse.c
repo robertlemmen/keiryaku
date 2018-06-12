@@ -258,7 +258,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
 //        printf("// result: ");
         value result = interp_eval(p->interp, cv);
         if (result != VALUE_NIL) {
-            dump_value(result);
+            dump_value(result, stdout);
             printf("\n");
         }
     }

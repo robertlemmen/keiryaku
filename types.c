@@ -4,6 +4,8 @@
 #include <assert.h>
 #include <string.h>
 
+#include "heap.h"
+
 value make_cons(struct allocator *a, value car, value cdr) {
     assert(sizeof(struct cons) == 16);
     struct cons *cp = allocator_alloc(a, sizeof(struct cons));
@@ -73,13 +75,14 @@ char* value_to_string(value *s) {
     }
 }
 
-void dump_value(value v) {
+// XXX this needs to move to ports
+void dump_value(value v, FILE *f) {
     switch (value_type(v)) {
         case TYPE_INT:
-            printf("%i", intval(v));
+            fprintf(f, "%i", intval(v));
             break;
         case TYPE_FLOAT:
-            printf("%f", floatval(v));
+            fprintf(f, "%f", floatval(v));
             break;
         case TYPE_ENUM:
             switch (v) {
@@ -87,58 +90,58 @@ void dump_value(value v) {
                     // XXX
                     break;
                 case VALUE_TRUE:
-                    printf("#t");
+                    fprintf(f, "#t");
                     break;
                 case VALUE_FALSE:
-                    printf("#f");
+                    fprintf(f, "#f");
                     break;
                 case VALUE_EMPTY_LIST:
-                    printf("()");
+                    fprintf(f, "()");
                     break;
                 default:
-                    printf("<?enum %li>", v);
+                    fprintf(f, "<?enum %li>", v);
                     //assert(0 && "unsupported enum value");
             }
             break;
         case TYPE_SYMBOL:
         case TYPE_SHORT_SYMBOL:
-            printf("%s", value_to_symbol(&v));
+            fprintf(f, "%s", value_to_symbol(&v));
             break;
         case TYPE_STRING:
         case TYPE_SHORT_STRING:
-            printf("\"%s\"", value_to_string(&v));
+            fprintf(f, "\"%s\"", value_to_string(&v));
             break;
         case TYPE_CONS:
-            printf("(");
+            fprintf(f, "(");
             if ((car(v) != VALUE_NIL) || (cdr(v) != VALUE_NIL)) {
-                dump_value(car(v));
+                dump_value(car(v), f);
                 while (   (cdr(v) != VALUE_EMPTY_LIST) 
                        && (cdr(v) != VALUE_NIL)
                        && (value_type(cdr(v)) == TYPE_CONS) ) {
-                    printf(" ");
+                    fprintf(f, " ");
                     v = cdr(v);
-                    dump_value(car(v));
+                    dump_value(car(v), f);
                 }
                 if ((cdr(v) != VALUE_EMPTY_LIST) && (cdr(v) != VALUE_NIL)) {
-                    printf(" . ");
-                    dump_value(cdr(v));
+                    fprintf(f, " . ");
+                    dump_value(cdr(v), f);
                 }
             }
-            printf(")");
+            fprintf(f, ")");
             break;
         case TYPE_VECTOR:
-            printf("#(");
+            fprintf(f, "#(");
             int length = vector_length(v);
             for (int i = 0; i < length; i++) {
                 if (i) {
-                    printf(" ");
+                    fprintf(f, " ");
                 }
-                dump_value(vector_ref(v, i));
+                dump_value(vector_ref(v, i), f);
             }
-            printf(")");
+            fprintf(f, ")");
             break;
         default:
-            printf("<?type %li>", value_type(v));
+            fprintf(f, "<?type %li>", value_type(v));
 //            assert(0 && "unsupported value type");
     }
 }
@@ -161,8 +164,7 @@ value make_builtin1(struct allocator *a, t_builtin1 funcptr) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr1 = funcptr;
     p->arity = 1;
-    value ret = (uint64_t)p | TYPE_BUILTIN;
-    return ret;
+    return (uint64_t)p | TYPE_BUILTIN;
 }
 
 t_builtin1 builtin1_ptr(value v) {
@@ -176,8 +178,7 @@ value make_builtin2(struct allocator *a, t_builtin2 funcptr) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr2 = funcptr;
     p->arity = 2;
-    value ret = (uint64_t)p | TYPE_BUILTIN;
-    return ret;
+    return (uint64_t)p | TYPE_BUILTIN;
 }
 
 t_builtin2 builtin2_ptr(value v) {
@@ -191,8 +192,7 @@ value make_builtin3(struct allocator *a, t_builtin3 funcptr) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr3 = funcptr;
     p->arity = 3;
-    value ret = (uint64_t)p | TYPE_BUILTIN;
-    return ret;
+    return (uint64_t)p | TYPE_BUILTIN;
 }
 
 t_builtin3 builtin3_ptr(value v) {

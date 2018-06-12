@@ -2,10 +2,12 @@
 - equals? should support cyclic structres, also dump_values and list?
 - equals? needs implementation for vectors
 - implement case, assv and friends, towards 02-chibi-derived 
+- clean up includes-graph
 - even more tests from chibi source
 - support #true and #false long forms in parser
 - properly scan heap for free block when request > 1 cell
 - clean up empty arenas at end, to find stuff that we failed to collect
+- destructor-on-gc e.g. for ports
 - restructure immediate representation
 - symbols could be flyweights
 - better gc with nursery, bump allocator and forwarding pointers

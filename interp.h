@@ -16,6 +16,7 @@ value interp_eval(struct interp *i, value expr);
 void interp_gc(struct interp *i);
 void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l);
 
+struct interp_env* interp_top_env(struct interp *i);
 void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, value value);
 
 #endif /* INTERP_H */
