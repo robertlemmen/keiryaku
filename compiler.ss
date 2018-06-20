@@ -119,13 +119,24 @@
     (lambda (arg)
         (cdr (cdr (cdr (cdr arg))))))
 
+(define _emit-cond-body
+    (lambda (ex next _compile)
+        (if (cdr ex) 
+            (if (eq? (cadr ex) '=>)
+; XXX this really needs a let in the resulting code rather than running (car ex)
+; twice
+                (list 'if (_compile (car ex)) (list (_compile (caddr ex)) (_compile (car ex))) (_emit-cond-case next _compile)) 
+                (list 'if (_compile (car ex)) (list 'begin (_compile (cadr ex))) (_emit-cond-case next _compile)) )
+            (list 'if (_compile (car ex)) (list 'begin (_compile (cadr ex))) (_emit-cond-case next _compile)) )))
+
 (define _emit-cond-case
     (lambda (ex _compile) 
         (if (null? ex)
             '()
             (if (eq? (caar ex) 'else)
+; XXX can there be a => in the else branch? what does it get executed on?
                 (_compile (cadar ex))
-                (list 'if (_compile (caar ex)) (list 'begin (_compile (cadar ex))) (_emit-cond-case (cdr ex) _compile)) ))))
+                (_emit-cond-body (car ex) (cdr ex) _compile))) ))
 
 (define _emit-and-case
     (lambda (ex _compile)
