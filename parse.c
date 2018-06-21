@@ -8,6 +8,7 @@
 
 #include "types.h"
 #include "interp.h"
+#include "global.h"
 
 struct parser {
     struct allocator *alloc;
@@ -241,21 +242,21 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
 
     if (!p->exp_stack_top) {
         // we have a fully parsed expression, compile it
-//        printf("// parsed: ");
-//        dump_value(cv);
-//        printf("\n");
+        if (arg_debug_compiler) {
+            printf("// parsed expression: ");
+            dump_value(cv, stdout);
+            printf("\n");
+        }
         value comp_expr = make_cons(p->alloc, make_symbol(p->alloc, "quote"),
                                               make_cons(p->alloc, cv, VALUE_EMPTY_LIST));
         comp_expr = make_cons(p->alloc, make_symbol(p->alloc, "_compile"), make_cons(p->alloc, comp_expr, VALUE_EMPTY_LIST));
-//        printf("// compiler exec: ");
-//        dump_value(comp_expr);
-//        printf("\n");
         cv = interp_eval(p->interp, comp_expr);
-//        printf("// compiled: ");
-//        dump_value(cv);
-//        printf("\n");
+        if (arg_debug_compiler) {
+            printf("// compiled expression: ");
+            dump_value(cv, stdout);
+            printf("\n");
+        }
         // we now have something potentially executable, so evaluate it
-//        printf("// result: ");
         value result = interp_eval(p->interp, cv);
         if (result != VALUE_NIL) {
             dump_value(result, stdout);

@@ -23,6 +23,7 @@ static struct option long_options[] = {
     {"help", no_argument, 0, 'h'},
     {"version", no_argument, 0, 'v'},
     {"debug", no_argument, 0, 'd'},
+    {"debug-compiler", no_argument, 0, 'D'},
     {"no-compiler", no_argument, 0, 'N'},
     {0, 0, 0, 0}
 };
@@ -30,10 +31,11 @@ static struct option long_options[] = {
 void usage(char *prog_name) {
     fprintf(stderr, "Usage: %s [options]\n"
         "Options:\n"
-        "  --help -h -?     print this text\n"
-        "  --version -v     print the program version\n"
-        "  --debug -d       switch on code helpful in debug environments\n"
-        "  --no-compiler -N do not load compiler, bare interpreter\n\n",
+        "  --help -h -?         print this text\n"
+        "  --version -v         print the program version\n"
+        "  --debug -d           switch on code helpful in debug environments\n"
+        "  --debug-compiler -D  show input and output of compile stage\n"
+        "  --no-compiler -N     do not load compiler, bare interpreter\n\n",
         prog_name);
 }
 
@@ -57,15 +59,12 @@ void consume_file(struct parser *p, char *fname) {
 }
 
 int main(int argc, char **argv) {
-    int option_index = 0;
     int c;
-
     char *history_file = NULL;
-
     bool load_compiler = true;
 
     while (1) {
-        c = getopt_long(argc, argv, "?hvd", long_options, &option_index);
+        c = getopt_long(argc, argv, "?hvdND", long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -76,7 +75,10 @@ int main(int argc, char **argv) {
                 return 0;
                 break;
             case 'd':
-                arg_debug = 1;
+                arg_debug = true;
+                break;
+            case 'D':
+                arg_debug_compiler = true;
                 break;
             case 'N':
                 load_compiler = false;
@@ -91,8 +93,14 @@ int main(int argc, char **argv) {
         }
     }
 
-    if (option_index < (argc-1)) {
-        fprintf(stderr, "useless argument \"%s\"\n", argv[option_index]);
+    if (arg_debug_compiler && ! load_compiler) {
+        fprintf(stderr, "arguments --debug-compiler and --no-compiler are mutually exclusive\n");
+        usage(argv[0]);
+        return 1;
+    }
+
+    if (optind < argc) {
+        fprintf(stderr, "useless argument \"%s\"\n", argv[optind]);
         usage(argv[0]);
         return 1;
     }
@@ -130,11 +138,9 @@ int main(int argc, char **argv) {
     }
 
     if (arg_debug) {
-//        printf("runnint initial GC..\n");
         parser_gc(p);
     }
 
-//    printf("-----------------------------\n");
     if (isatty(fileno(stdin))) {
         char *input;
         char buffer[BUFSIZE];
@@ -152,10 +158,8 @@ int main(int argc, char **argv) {
     else {
         consume_stream(p, stdin);
     }
-//    printf("-----------------------------\n");
 
     if (arg_debug) {
-//        printf("cleaning up all remaining memory..\n");
         parser_gc(p);
     }
 

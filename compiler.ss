@@ -124,7 +124,7 @@
         (if (cdr ex) 
             (if (eq? (cadr ex) '=>)
 ; XXX this really needs a let in the resulting code rather than running (car ex)
-; twice
+; twice. also probably doesn't work for an inline-defined lambda, another let
                 (list 'if (_compile (car ex)) (list (_compile (caddr ex)) (_compile (car ex))) (_emit-cond-case next _compile)) 
                 (list 'if (_compile (car ex)) (list 'begin (_compile (cadr ex))) (_emit-cond-case next _compile)) )
             (list 'if (_compile (car ex)) (list 'begin (_compile (cadr ex))) (_emit-cond-case next _compile)) )))
@@ -134,9 +134,29 @@
         (if (null? ex)
             '()
             (if (eq? (caar ex) 'else)
-; XXX can there be a => in the else branch? what does it get executed on?
                 (_compile (cadar ex))
                 (_emit-cond-body (car ex) (cdr ex) _compile))) ))
+
+
+; XXX too many lambdas to support case, fold them together
+(define _emit-case-body
+    (lambda (ex _compile)
+        (if (eq? (car ex) '=>)
+            (list 'let (list (list 'func (cadr ex))) (list 'func 'result))
+            (car ex) )))
+
+(define _emit-case-entry
+    (lambda (ex _compile)
+        (if (null? (cdr ex))
+            (if (eq? (caar ex) 'else)
+                (_emit-case-body (cdar ex) _compile)
+                (list 'if (list 'memv 'result (list 'quote (caar ex))) (cadar ex) #f))
+            (list 'if (list 'memv 'result (list 'quote (caar ex))) (cadar ex) (_emit-case-entry (cdr ex) _compile)) )))
+
+(define _emit-case-case
+    (lambda (ex _compile)
+        (list 'let (list (list 'result (_compile (car ex)))) (_emit-case-entry (cdr ex) _compile)) ))
+
 
 (define _emit-and-case
     (lambda (ex _compile)
@@ -186,6 +206,11 @@
 ; XXX darn seems we need the recursive let version, then we can avoid the extra
 ; define above
                 (_emit-cond-case ex _compile)) )
+        (compile-case
+            (lambda (ex _compile)
+; XXX darn seems we need the recursive let version, then we can avoid the extra
+; define above
+                (_emit-case-case ex _compile)) )
         (compile-make-vector
             (lambda (ex _compile)
                 (if (null? (cdr ex))
@@ -196,6 +221,11 @@
                 (if (null? (cddr ex))
                     (cons 'let ex)
                     (list 'let (car ex) (cons 'begin (cdr ex))))))
+        (compile-arity2-member
+            (lambda (ex _compile)
+                (if (null? (cddr ex))
+                    (list '_memberg (car ex) (cadr ex) 'equal?)
+                    (cons '_memberg ex))))
         ]
         (lambda (ex)
             (if (pair? ex)
@@ -207,13 +237,17 @@
                             (compile-not (cdr ex) _compile)
                             (if (eq? (car ex) 'cond)
                                 (compile-cond (cdr ex) _compile)
-                                (if (eq? (car ex) 'let)
-                                    (compile-let (cdr ex) _compile)
-                                    (if (eq? (car ex) 'quote)
-                                        ex
-                                        (if (eq? (car ex) 'make-vector)
-                                            (compile-make-vector (cdr ex) _compile)
-                                            (cons (_compile (car ex)) (_compile (cdr ex))))))))))
+                                (if (eq? (car ex) 'case)
+                                    (compile-case (cdr ex) _compile)
+                                    (if (eq? (car ex) 'let)
+                                        (compile-let (cdr ex) _compile)
+                                        (if (eq? (car ex) 'member)
+                                            (compile-arity2-member (cdr ex) _compile)
+                                            (if (eq? (car ex) 'quote)
+                                                ex
+                                                (if (eq? (car ex) 'make-vector)
+                                                    (compile-make-vector (cdr ex) _compile)
+                                                    (cons (_compile (car ex)) (_compile (cdr ex))))))))))))
                 ex))))
 
 ; some base environment, should probably be separate from compiler, and should
@@ -242,6 +276,7 @@
                 (list-vec-copy-rec vals rv 0)
                 rv)))))
 
+; XXX the assoc with compare is the same as this...
 (define _assg
     (lambda (obj alist comp)
         (if (null? alist)
@@ -262,6 +297,22 @@
 (define assoc
     (lambda (obj alist)
         (_assg obj alist equal?)))
+
+(define _memberg
+    (lambda (obj list compare)
+        (if (null? list)
+            #f
+            (if (compare obj (car list))
+                list
+                (member obj (cdr list) compare))) ))
+
+(define memq
+    (lambda (obj list)
+        (_memberg obj list eq?) ))
+
+(define memv
+    (lambda (obj list)
+        (_memberg obj list eqv?) ))
 
 (define boolean=? 
     (lambda (a b . m)
