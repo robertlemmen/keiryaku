@@ -98,6 +98,9 @@ void dump_value(value v, FILE *f) {
                 case VALUE_EMPTY_LIST:
                     fprintf(f, "()");
                     break;
+                case VALUE_EOF:
+                    fprintf(f, "<end-of-file>");
+                    break;
                 default:
                     fprintf(f, "<?enum %li>", v);
                     //assert(0 && "unsupported enum value");
@@ -148,6 +151,7 @@ void dump_value(value v, FILE *f) {
 
 struct builtin_ref {
     union {
+        t_builtin0 funcptr0;
         t_builtin1 funcptr1;
         t_builtin2 funcptr2;
         t_builtin3 funcptr3;
@@ -158,6 +162,20 @@ struct builtin_ref {
 int builtin_arity(value v) {
     struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
     return p->arity;
+}
+
+value make_builtin0(struct allocator *a, t_builtin0 funcptr) {
+    struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
+    p->funcptr0 = funcptr;
+    p->arity = 0;
+    return (uint64_t)p | TYPE_BUILTIN;
+}
+
+t_builtin0 builtin0_ptr(value v) {
+    assert(value_type(v) == TYPE_BUILTIN);
+    struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
+    assert(p->arity == 0);
+    return p->funcptr0;
 }
 
 value make_builtin1(struct allocator *a, t_builtin1 funcptr) {
@@ -205,7 +223,7 @@ t_builtin3 builtin3_ptr(value v) {
 value make_builtinv(struct allocator *a, t_builtinv funcptr) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr1 = funcptr;
-    p->arity = 0;
+    p->arity = BUILTIN_ARITY_VARIADIC;
     value ret = (uint64_t)p | TYPE_BUILTIN;
     return ret;
 }
@@ -213,7 +231,7 @@ value make_builtinv(struct allocator *a, t_builtinv funcptr) {
 t_builtinv builtinv_ptr(value v) {
     assert(value_type(v) == TYPE_BUILTIN);
     struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
-    assert(p->arity == 0);
+    assert(p->arity == BUILTIN_ARITY_VARIADIC);
     return p->funcptr1;
 }
 

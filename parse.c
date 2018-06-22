@@ -13,9 +13,9 @@
 struct parser {
     struct allocator *alloc;
     struct expr_lnk *exp_stack_top;
-    // XXX perhaps should be passed in through constructor...
-    struct interp *interp;
     int tokenizer_state;
+    void (*callback)(value exp, void *arg);
+    void *cb_arg;
 };
 
 /* more parser states means you need to widen the field in expr_lnk below! */
@@ -78,8 +78,7 @@ void parser_store_cell(struct parser *p, value cv) {
     }
 }
 
-// XXX noone uses interactive anymore, clean it up!
-void parser_parse(struct parser *p, int tok, int num, char *str, bool interactive) {
+void parser_parse(struct parser *p, int tok, int num, char *str) {
     value cv = VALUE_NIL;
     struct expr_lnk *cl;
     switch (tok) {
@@ -241,27 +240,11 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
     }
 
     if (!p->exp_stack_top) {
+        // XXX we should have a callback that gets called with an expression,
+        // and msot of this block should be in there. this way the parser also
+        // does not need to know about the interpreter
         // we have a fully parsed expression, compile it
-        if (arg_debug_compiler) {
-            printf("// parsed expression: ");
-            dump_value(cv, stdout);
-            printf("\n");
-        }
-        value comp_expr = make_cons(p->alloc, make_symbol(p->alloc, "quote"),
-                                              make_cons(p->alloc, cv, VALUE_EMPTY_LIST));
-        comp_expr = make_cons(p->alloc, make_symbol(p->alloc, "_compile"), make_cons(p->alloc, comp_expr, VALUE_EMPTY_LIST));
-        cv = interp_eval(p->interp, comp_expr);
-        if (arg_debug_compiler) {
-            printf("// compiled expression: ");
-            dump_value(cv, stdout);
-            printf("\n");
-        }
-        // we now have something potentially executable, so evaluate it
-        value result = interp_eval(p->interp, cv);
-        if (result != VALUE_NIL) {
-            dump_value(result, stdout);
-            printf("\n");
-        }
+        p->callback(cv, p->cb_arg);
     }
 }
 /* the tokenizer takes in input string and tokenizes it, calling parse() for
@@ -278,7 +261,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str, bool interactiv
 // parens easier...
 // XXX we should be able to treat things as ".+" as identifiers, see
 // 15-little-shadows.t
-int parser_tokenize(struct parser *p, char *data, bool interactive) {
+int parser_tokenize(struct parser *p, char *data) {
     char *cp = data;
     char *mark = NULL;
     if ((p->tokenizer_state == S_IDENT) || (p->tokenizer_state == S_NUMBER)) {
@@ -291,19 +274,19 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
                 // ignore whitespace
             }
             else if (*cp == '(') {
-                parser_parse(p, P_LPAREN, 0, NULL, interactive);
+                parser_parse(p, P_LPAREN, 0, NULL);
             }
             else if (*cp == ')') {
-                parser_parse(p, P_RPAREN, 0, NULL, interactive);
+                parser_parse(p, P_RPAREN, 0, NULL);
             }
             else if (*cp == '[') {
-                parser_parse(p, P_LBRACKET, 0, NULL, interactive);
+                parser_parse(p, P_LBRACKET, 0, NULL);
             }
             else if (*cp == ']') {
-                parser_parse(p, P_RBRACKET, 0, NULL, interactive);
+                parser_parse(p, P_RBRACKET, 0, NULL);
             }
             else if (*cp == '\'') {
-                parser_parse(p, P_QUOTE, 0, NULL, interactive);
+                parser_parse(p, P_QUOTE, 0, NULL);
             }
             else if (*cp == ';') {
                 p->tokenizer_state = S_COMMENT;
@@ -316,7 +299,7 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
                 p->tokenizer_state = S_STRING;
             }
             else if (*cp == '.') {
-                parser_parse(p, P_DOT, 0, NULL, interactive);
+                parser_parse(p, P_DOT, 0, NULL);
             }
             else if ((*cp >= '0') && (*cp <= '9')) {
                 mark = cp;
@@ -363,7 +346,7 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
                 p->tokenizer_state = S_INIT;
                 char *ep = cp-1;
                 int num_literal = strtol(mark, &ep, 10);
-                parser_parse(p, P_NUMBER, num_literal, NULL, interactive);
+                parser_parse(p, P_NUMBER, num_literal, NULL);
                 cp--;
                 mark = NULL;
             }
@@ -374,22 +357,22 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
                 char *str = malloc(cp - mark);
                 strncpy(str, mark+1, cp - mark - 1);
                 str[cp - mark - 1] = '\0';
-                parser_parse(p, P_STRING, 0, str, interactive);
+                parser_parse(p, P_STRING, 0, str);
                 free(str);
                 mark = NULL;
             }
         }
         else if (p->tokenizer_state == S_HASH) {
             if (*cp == 't') {
-                parser_parse(p, P_BOOL, 1, NULL, interactive);
+                parser_parse(p, P_BOOL, 1, NULL);
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == 'f') {
-                parser_parse(p, P_BOOL, 0, NULL, interactive);
+                parser_parse(p, P_BOOL, 0, NULL);
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == '(') {
-                parser_parse(p, P_VECTOR, 0, NULL, interactive);
+                parser_parse(p, P_VECTOR, 0, NULL);
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == '!') {
@@ -421,7 +404,7 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
                 char *str = malloc(cp - mark + 1);
                 strncpy(str, mark, cp - mark);
                 str[cp - mark] = '\0';
-                parser_parse(p, P_IDENT, 0, str, interactive);
+                parser_parse(p, P_IDENT, 0, str);
                 free(str);
                 cp--;
                 mark = NULL;
@@ -446,7 +429,7 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
                 char *str = malloc(cp - mark + 1);
                 strncpy(str, mark, cp - mark);
                 str[cp - mark] = '\0';
-                parser_parse(p, P_IDENT, 0, str, interactive);
+                parser_parse(p, P_IDENT, 0, str);
                 free(str);
                 cp--;
                 mark = NULL;
@@ -465,12 +448,13 @@ int parser_tokenize(struct parser *p, char *data, bool interactive) {
     return 0;
 }
 
-struct parser* parser_new(struct allocator *alloc, struct interp *i) {
+struct parser* parser_new(struct allocator *alloc, void (*callback)(value exp, void *arg), void *cb_arg) {
     struct parser *ret = malloc(sizeof(struct parser));
     ret->alloc = alloc;
     ret->tokenizer_state = S_INIT;
     ret->exp_stack_top = NULL;
-    ret->interp = i;
+    ret->callback = callback;
+    ret->cb_arg = cb_arg;
     return ret;
 }
 
@@ -479,21 +463,14 @@ void parser_free(struct parser *p) {
     free(p);
 }
 
-int parser_consume(struct parser *p, char *data, bool interactive) {
+int parser_consume(struct parser *p, char *data) {
     assert(p != NULL);
     assert(data != NULL);
     
-    return parser_tokenize(p, data, interactive);
+    return parser_tokenize(p, data);
 }
 
 void parser_eof(struct parser *p) {
-    parser_parse(p, P_EOF, 0, NULL, false);
-    // XXX is this still usefule now that we GC during runtime? we should do it
-    // at end of program though, so we can find memory leaks
-    interp_gc(p->interp);
+    parser_parse(p, P_EOF, 0, NULL);
 }
 
-void parser_gc(struct parser *p) {
-    assert(p != NULL);
-    interp_gc(p->interp);
-}

@@ -43,7 +43,7 @@ void consume_stream(struct parser *p, FILE *f) {
     char buffer[BUFSIZE];
     int pos = 0;
     while (fgets(&buffer[pos], BUFSIZE-1-pos, f)) {
-        pos = parser_consume(p, buffer, false);
+        pos = parser_consume(p, buffer);
     }
     parser_eof(p);
 }
@@ -56,6 +56,38 @@ void consume_file(struct parser *p, char *fname) {
     }
     consume_stream(p, fs);
     fclose(fs);
+}
+
+struct parser_cb_args {
+    struct interp *i;
+    struct allocator *a;
+};
+
+// XXX with some of this in here, some configs may not be globals anymore
+static void parser_callback(value expr, void *arg) {
+    struct parser_cb_args *pargs = (struct parser_cb_args*)arg;
+
+    if (arg_debug_compiler) {
+        printf("// parsed expression: ");
+        dump_value(expr, stdout);
+        printf("\n");
+    }
+    value comp_expr = make_cons(pargs->a, make_symbol(pargs->a, "quote"),
+                                          make_cons(pargs->a, expr, VALUE_EMPTY_LIST));
+    comp_expr = make_cons(pargs->a, make_symbol(pargs->a, "_compile"), 
+                                    make_cons(pargs->a, comp_expr, VALUE_EMPTY_LIST));
+    expr = interp_eval(pargs->i, comp_expr);
+    if (arg_debug_compiler) {
+        printf("// compiled expression: ");
+        dump_value(expr, stdout);
+        printf("\n");
+    }
+    // we now have something potentially executable, so evaluate it
+    value result = interp_eval(pargs->i, expr);
+    if (result != VALUE_NIL) {
+        dump_value(result, stdout);
+        printf("\n");
+    }
 }
 
 int main(int argc, char **argv) {
@@ -120,25 +152,24 @@ int main(int argc, char **argv) {
 
     struct allocator *a = allocator_new();
     struct interp *i = interp_new(a);
-    struct parser *p = parser_new(a, i);
+    struct parser_cb_args pargs;
+    pargs.i = i;
+    pargs.a = a;
+    struct parser *p = parser_new(a, &parser_callback, &pargs);
 
     // XXX debug/experiments
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stdin"),
-        make_port(a, stdin, true, false, true, false));
+        port_new(a, stdin, true, false, true, false));
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stdout"),
-        make_port(a, stdout, false, true, true, false));
+        port_new(a, stdout, false, true, true, false));
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stderr"),
-        make_port(a, stderr, false, true, true, false));
+        port_new(a, stderr, false, true, true, false));
 
     if (load_compiler) {
         consume_file(p, "compiler.ss");
-    }
-
-    if (arg_debug) {
-        parser_gc(p);
     }
 
     if (isatty(fileno(stdin))) {
@@ -147,9 +178,9 @@ int main(int argc, char **argv) {
         int pos = 0;
         while ((input = linenoise("> ")) != NULL) {
             strncpy(&buffer[pos], input, BUFSIZE-pos-1);
-            pos = parser_consume(p, buffer, false);
+            pos = parser_consume(p, buffer);
             strncpy(&buffer[pos], "\n", BUFSIZE-pos-1);
-            pos = parser_consume(p, buffer, true);
+            pos = parser_consume(p, buffer);
             linenoiseHistoryAdd(input);
             free(input);
         }
@@ -160,7 +191,7 @@ int main(int argc, char **argv) {
     }
 
     if (arg_debug) {
-        parser_gc(p);
+        interp_gc(i);
     }
 
     parser_free(p);

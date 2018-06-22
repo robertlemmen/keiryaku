@@ -308,6 +308,29 @@ value builtin_display(struct allocator *alloc, value o, value p) {
     return VALUE_NIL;
 }
 
+value builtin_open_input_file(struct allocator *alloc, value f) {
+    return port_open_input_file(alloc, f);
+}
+
+value builtin_close_port(struct allocator *alloc, value p) {
+    port_close(p);
+    return VALUE_NIL;
+}
+
+value builtin_read(struct allocator *alloc, value p) {
+    return port_read(p);
+}
+
+value builtin_end_of_file(struct allocator *alloc, value v) {
+    return v == VALUE_EOF
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_mk_end_of_file(struct allocator *alloc) {
+    return VALUE_EOF;
+}
+
 value builtin_compile_stub(struct allocator *alloc, value v) {
     // XXX warrants explanation
     return v;
@@ -355,5 +378,10 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "binary-port?"), make_builtin1(alloc, &builtin_binary_port));
     env_bind(alloc, env, make_symbol(alloc, "newline"), make_builtin1(alloc, &builtin_newline));
     env_bind(alloc, env, make_symbol(alloc, "display"), make_builtin2(alloc, &builtin_display));
+    env_bind(alloc, env, make_symbol(alloc, "open-input-file"), make_builtin1(alloc, &builtin_open_input_file));
+    env_bind(alloc, env, make_symbol(alloc, "close-port"), make_builtin1(alloc, &builtin_close_port));
+    env_bind(alloc, env, make_symbol(alloc, "read"), make_builtin1(alloc, &builtin_read));
+    env_bind(alloc, env, make_symbol(alloc, "eof-object?"), make_builtin1(alloc, &builtin_end_of_file));
+    env_bind(alloc, env, make_symbol(alloc, "eof-object"), make_builtin0(alloc, &builtin_mk_end_of_file));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
 }

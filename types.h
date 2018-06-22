@@ -29,6 +29,7 @@
  *   0010____ - True
  *   0100____ - False
  *   0110____ - Empty List
+ *   1000____ - End Of File
  *
  * 'Specials' are enums, but all have the lowest enum bit set to make testing for 
  * them easier:
@@ -98,10 +99,11 @@ typedef uint64_t value;
 
 // XXX we should not need a nil, but then we need to make sure there are no CONS
 // that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
-#define VALUE_NIL          0b0000000
-#define VALUE_TRUE         0b0100000
-#define VALUE_FALSE        0b1000000
-#define VALUE_EMPTY_LIST   0b1100000
+#define VALUE_NIL         0b00000000
+#define VALUE_TRUE        0b00100000
+#define VALUE_FALSE       0b01000000
+#define VALUE_EMPTY_LIST  0b01100000
+#define VALUE_EOF         0b10000000
 
 #define VALUE_SP_IF      0b000010000
 #define VALUE_SP_DEFINE  0b000110000
@@ -170,12 +172,17 @@ char* value_to_string(value *s);
 /* Builtins
  * */
 
+#define BUILTIN_ARITY_VARIADIC -1
 int builtin_arity(value);
 
+typedef value (*t_builtin0)(struct allocator*);
 typedef value (*t_builtin1)(struct allocator*, value);
 typedef value (*t_builtin2)(struct allocator*, value, value);
 typedef value (*t_builtin3)(struct allocator*, value, value, value);
 typedef value (*t_builtinv)(struct allocator*, value);
+
+value make_builtin0(struct allocator *a, t_builtin0 funcptr);
+t_builtin0 builtin0_ptr(value);
 
 value make_builtin1(struct allocator *a, t_builtin1 funcptr);
 t_builtin1 builtin1_ptr(value);
@@ -208,7 +215,7 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v);
  * at development, debugging and bootstrapping, at program runtime equivalent
  * functions from the scheme layer should be used
  * */
-
+// XXX whether these should be in here or in ports is questionable...
 void dump_value(value v, FILE *f);
 
 #endif /* TYPES_H */

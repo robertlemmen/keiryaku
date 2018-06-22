@@ -440,7 +440,7 @@ tailcall_label:
                 }
             }
             else if (value_type(op) == TYPE_BUILTIN) {
-                if (builtin_arity(op) == 0) {
+                if (builtin_arity(op) == BUILTIN_ARITY_VARIADIC) {
                     value current_arg = cdr(f->expr);
                     f->locals[1] = VALUE_EMPTY_LIST;
                     value out_ca = VALUE_NIL;
@@ -459,6 +459,17 @@ tailcall_label:
                     }
                     t_builtinv funcptr = builtinv_ptr(op);
                     return funcptr(i->alloc, f->locals[1]);
+                }
+                else if (builtin_arity(op) == 0) {
+                    t_builtin0 funcptr = builtin0_ptr(op);
+                    value pos_args[0];
+                    int arg_count = interp_collect_list(cdr(f->expr), 0, pos_args);
+                    if (arg_count != 0) {
+                        fprintf(stderr, "Arity error in application of builtin: expected 0 args but got %i\n",
+                            arg_count);
+                        return VALUE_NIL;
+                    }
+                    return funcptr(i->alloc);
                 }
                 else if (builtin_arity(op) == 1) {
                     t_builtin1 funcptr = builtin1_ptr(op);
