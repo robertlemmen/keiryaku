@@ -262,19 +262,21 @@
             0
             (+ 1 (length (cdr l))))))
 
-(define vector
-    (let [(list-vec-copy-rec (lambda (l v i)
+(define _list-vec-copy-rec
+    (lambda (l v i)
         (if (pair? l)
             (begin
                 (vector-set! v i (car l))
-                (list-vec-copy-rec (cdr l) v (+ 1 i))
+                (_list-vec-copy-rec (cdr l) v (+ 1 i))
             )
-            '())))]
+            '())))
+
+(define vector
     (lambda vals
         (let [(rv (make-vector (length vals) 0))]
             (begin
-                (list-vec-copy-rec vals rv 0)
-                rv)))))
+                (_list-vec-copy-rec vals rv 0)
+                rv))))
 
 ; XXX the assoc with compare is the same as this...
 (define _assg

@@ -372,6 +372,7 @@ tailcall_label:
                             return VALUE_NIL;
                         }
                         value current_arg = pos_args[0];
+                        f->extra_env = env_new(i->alloc, f->env);
                         while (value_type(current_arg) == TYPE_CONS) {
                             value arg_pair = car(current_arg);
                             if (value_type(arg_pair) != TYPE_CONS) {
@@ -385,10 +386,12 @@ tailcall_label:
                                 return VALUE_NIL;
                             }
                             value arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->env);
-                            env_bind(i->alloc, f->env, arg_name, arg_value);
+                            env_bind(i->alloc, f->extra_env, arg_name, arg_value);
                             current_arg = cdr(current_arg);
                         }
                         f->expr = pos_args[1];
+                        f->env = f->extra_env;
+                        f->extra_env = NULL;
                         goto tailcall_label;
                         break;
                     case VALUE_SP_APPLY:;
