@@ -172,10 +172,10 @@
 (define _emit-or-case
     (lambda (ex _compile)
         (if (pair? ex)
-            (if (null? (cdr ex))
-                (let [(cex (_compile (car ex)))]
-                    (list 'if cex cex #f))
-                (list 'if (_compile (car ex)) #t (_emit-and-case (cdr ex) _compile)))
+            (let [(cex (_compile (car ex)))]
+                (if (null? (cdr ex))
+                    (list 'if cex cex #f)
+                    (list 'if cex cex (_emit-and-case (cdr ex) _compile))))
             ex)))
 
 (define sub1
