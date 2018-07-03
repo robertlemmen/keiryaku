@@ -7,32 +7,57 @@
 #include "interp.h"
 #include "ports.h"
 
-value builtin_plus(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
+value builtin_plus(struct allocator *alloc, value l) {
+    int ret = 0;
+    while (value_type(l) == TYPE_CONS) {
+        ret += intval(car(l));
+        l = cdr(l);    
+    }
 
-    return make_int(alloc, intval(a) + intval(b));
+    return make_int(alloc, ret);
 }
 
-value builtin_minus(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
-
-    return make_int(alloc, intval(a) - intval(b));
+value builtin_minus(struct allocator *alloc, value l) {
+    assert(value_type(l) == TYPE_CONS);
+    int ret = 0;
+    int count = 0;
+    int first = 0;
+    while (value_type(l) == TYPE_CONS) {
+        ret -= intval(car(l));
+        if (!count) {
+            first = ret;
+        }
+        l = cdr(l);
+        count++;
+    }
+    if (count > 1) {
+        ret -= first*2;
+    }
+    return make_int(alloc, ret);
 }
 
-value builtin_mul(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
+value builtin_mul(struct allocator *alloc, value l) {
+    int ret = 1;
+    while (value_type(l) == TYPE_CONS) {
+        ret *= intval(car(l));
+        l = cdr(l);    
+    }
 
-    return make_int(alloc, intval(a) * intval(b));
+    return make_int(alloc, ret);
 }
 
-value builtin_div(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
+value builtin_div(struct allocator *alloc, value l) {
+    // XXX arity-one case doesn't work with this logic, but we don't have
+    // rationals anyway...
+    assert(value_type(l) == TYPE_CONS);
+    int ret = intval(car(l));
+    l = cdr(l);    
+    while (value_type(l) == TYPE_CONS) {
+        ret /= intval(car(l));
+        l = cdr(l);    
+    }
 
-    return make_int(alloc, intval(a) / intval(b));
+    return make_int(alloc, ret);
 }
 
 value builtin_numeric_equals(struct allocator *alloc, value a, value b) {
@@ -338,10 +363,10 @@ value builtin_compile_stub(struct allocator *alloc, value v) {
 
 void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     // create basic environment
-    env_bind(alloc, env, make_symbol(alloc, "+"), make_builtin2(alloc, &builtin_plus));
-    env_bind(alloc, env, make_symbol(alloc, "-"), make_builtin2(alloc, &builtin_minus));
-    env_bind(alloc, env, make_symbol(alloc, "*"), make_builtin2(alloc, &builtin_mul));
-    env_bind(alloc, env, make_symbol(alloc, "/"), make_builtin2(alloc, &builtin_div));
+    env_bind(alloc, env, make_symbol(alloc, "+"), make_builtinv(alloc, &builtin_plus));
+    env_bind(alloc, env, make_symbol(alloc, "-"), make_builtinv(alloc, &builtin_minus));
+    env_bind(alloc, env, make_symbol(alloc, "*"), make_builtinv(alloc, &builtin_mul));
+    env_bind(alloc, env, make_symbol(alloc, "/"), make_builtinv(alloc, &builtin_div));
     env_bind(alloc, env, make_symbol(alloc, "="), make_builtin2(alloc, &builtin_numeric_equals));
     env_bind(alloc, env, make_symbol(alloc, "<"), make_builtin2(alloc, &builtin_lt));
     env_bind(alloc, env, make_symbol(alloc, ">"), make_builtin2(alloc, &builtin_gt));

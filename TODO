@@ -1,13 +1,29 @@
+language completeness
+---------------------
+- even more "derived" tests from chibi source
 - turn push-parsing into proper REPL, towards (include ...)
+- assoc shoudl support 3-arity comparator case, see member
+
+core features
+-------------
+- call/cc
+
+technicalities
+--------------
+- support #true and #false long forms in parser
 - equals? should support cyclic structres, also dump_values and list?
 - equals? needs implementation for vectors
-- assoc shoudl support 3-arity comparator case, see member
-- clean up includes-graph
-- even more tests from chibi source
-- support #true and #false long forms in parser
+- reduce includes-graph
+
+memory management
+-----------------
 - properly scan heap for free block when request > 1 cell
 - clean up empty arenas at end, to find stuff that we failed to collect
-- destructor-on-gc e.g. for ports
-- restructure immediate representation
-- symbols could be flyweights
+- destructor-on-gc e.g. for ports?
 - better gc with nursery, bump allocator and forwarding pointers
+
+performance
+-----------
+- symbols could be flyweights, perhaps not so great when we do boxed lookups?
+- symbol lookup in env could use binary tree?
+- symbols could be replaced by boxes during lookup?

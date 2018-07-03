@@ -2,7 +2,7 @@
 #define TYPES_H
 
 #include <stdint.h>
-// XXX just for dump_value bewlo, which needs to move to ports
+// XXX just for dump_value below, which needs to move to ports
 #include <stdio.h>
 
 /* Value Representation
@@ -61,7 +61,7 @@
  *   XXX will need a "other" non-immediate where the actual type is only stored
  *   on the heap, sadly
  *
- * XXX will need boxes ?
+ * XXX will need boxes? they could be two-bit tagged immediates...
  *  */
 
 // XXX we have to make sure that we never have CONS entries that are empty,
