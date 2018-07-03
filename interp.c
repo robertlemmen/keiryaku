@@ -391,15 +391,47 @@ tailcall_label:
                         f->expr = pos_args[1];
                         goto tailcall_label;
                         break;
-                    case VALUE_SP_APPLY:
-                        arg_count = interp_collect_list(args, 2, pos_args);
-                        if (arg_count != 2) {
-                            fprintf(stderr, "Arity error in application of special 'apply': expected 2 args but got %i\n",
+                    case VALUE_SP_APPLY:;
+                        // apply is variadic, so collect the args into a list.
+                        // also count while we are at it. the last item must be
+                        // a list, and will just be appended to out list
+                        value ca = args;
+                        f->locals[1] = VALUE_EMPTY_LIST;
+                        value prev = VALUE_NIL;
+                        value prev_prev = VALUE_NIL;
+                        arg_count = 0;
+                        while (value_type(ca) == TYPE_CONS) {
+                            value nc;
+                            if (arg_count == 0) {
+                                nc = car(ca);
+                            }
+                            else {
+                                nc = interp_eval_env(i, f, car(ca), f->env);
+                            }
+                            nc = make_cons(i->alloc, nc, VALUE_EMPTY_LIST);
+                            if (prev == VALUE_NIL) {
+                                f->locals[1] = nc;
+                            }
+                            else {
+                                set_cdr(prev, nc);
+                            }
+                            prev_prev = prev;
+                            prev = nc;
+                            ca = cdr(ca);
+                            arg_count++;
+                        }
+                        if (arg_count < 2) {
+                            fprintf(stderr, "Arity error in application of special 'apply': expected 2 or mote args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        f->expr = make_cons(i->alloc, pos_args[0], 
-                            interp_eval_env(i, f, pos_args[1], f->env));
+                        if (value_type(prev) != TYPE_CONS) {
+                            fprintf(stderr, "Error in application of special 'apply': last argument is not a list\n");
+                            return VALUE_NIL;
+                        }
+                        set_cdr(prev_prev, car(prev));
+                        f->expr = f->locals[1];
+                        f->locals[1] = VALUE_NIL;
                         goto tailcall_label;
                         break;
                     case VALUE_SP_SET:
@@ -580,6 +612,8 @@ tailcall_label:
             break;
         default:
             fprintf(stderr, "Unexpected value type 0x%lX in interp_eval\n", value_type(f->expr));
+            dump_value(f->expr, stderr);
+            fprintf(stderr, "\n");
             return VALUE_NIL;
     }
 
