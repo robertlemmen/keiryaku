@@ -1,5 +1,6 @@
 language completeness
 ---------------------
+- implement (apply ...) properly
 - even more "derived" tests from chibi source
 - turn push-parsing into proper REPL, towards (include ...)
 - assoc shoudl support 3-arity comparator case, see member
@@ -11,8 +12,8 @@ core features
 technicalities
 --------------
 - support #true and #false long forms in parser
-- equals? should support cyclic structres, also dump_values and list?
 - equals? needs implementation for vectors
+- equals? should support cyclic structres, also dump_values and list?
 - reduce includes-graph
 
 memory management

@@ -52,6 +52,11 @@
 (apply + '(1 2 3))
 (apply + 4 '(1 2 3))
 (apply + 4 5 '(1 2) )
+(define mything
+    (lambda (op . list)
+        (apply op list)))
+
+(apply mything + '(1 2 3))
 ===
 9
 720
@@ -74,4 +79,4 @@
 6
 10
 12
-
+6

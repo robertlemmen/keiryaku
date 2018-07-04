@@ -248,6 +248,7 @@ tailcall_label:
         case TYPE_ENUM:
         case TYPE_STRING:
         case TYPE_SHORT_STRING:
+        case TYPE_BUILTIN:
             return f->expr;
             break;
 
@@ -299,7 +300,7 @@ tailcall_label:
                                 value_type(pos_args[0]));
                             return VALUE_NIL;
                         }
-            /* XXX this breaks the tail-call idea of passing teh env around. perhaps it's
+            /* XXX this breaks the tail-call idea of passing the env around. perhaps it's
             * not needed anyway? 
                         if (i->current_env) {
                             i->current_env = env_bind(i->alloc, i->current_env, pos_args[0], VALUE_NIL);
@@ -409,6 +410,7 @@ tailcall_label:
                                 nc = car(ca);
                             }
                             else {
+                                //nc = car(ca);
                                 nc = interp_eval_env(i, f, car(ca), f->env);
                             }
                             nc = make_cons(i->alloc, nc, VALUE_EMPTY_LIST);
