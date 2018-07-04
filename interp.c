@@ -307,8 +307,7 @@ tailcall_label:
                             i->current_env->value = interp_eval(i, pos_args[1]);
                         }
                         else {*/
-                            // XXX perhaps this should bind in env rather then in top_env?
-                            env_bind(i->alloc, i->top_env, pos_args[0], 
+                            env_bind(i->alloc, f->env, pos_args[0], 
                                 interp_eval_env(i, f, pos_args[1], f->env));
             //            }
                         // XXX or what does it return?

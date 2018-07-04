@@ -383,7 +383,6 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "null?"), make_builtin1(alloc, &builtin_null));
     env_bind(alloc, env, make_symbol(alloc, "number?"), make_builtin1(alloc, &builtin_number));
     env_bind(alloc, env, make_symbol(alloc, "string?"), make_builtin1(alloc, &builtin_string));
-    // XXX how can this work if the symbol gets looked up first? same for symbol=? and symbol->string
     env_bind(alloc, env, make_symbol(alloc, "symbol?"), make_builtin1(alloc, &builtin_symbol));
     env_bind(alloc, env, make_symbol(alloc, "string-length"), make_builtin1(alloc, &builtin_string_length));
     env_bind(alloc, env, make_symbol(alloc, "string=?"), make_builtin2(alloc, &builtin_string_eq));
