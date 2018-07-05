@@ -151,7 +151,7 @@
             (if (eq? (caar ex) 'else)
                 (_emit-case-body (cdar ex) _compile)
                 (list 'if (list 'memv 'result (list 'quote (caar ex))) (cadar ex) #f))
-            (list 'if (list 'memv 'result (list 'quote (caar ex))) (cadar ex) (_emit-case-entry (cdr ex) _compile)) )))
+            (list 'if (list 'memv 'result (list 'quote (caar ex))) (_emit-case-body (cdar ex) _compile) (_emit-case-entry (cdr ex) _compile)) )))
 
 (define _emit-case-case
     (lambda (ex _compile)
@@ -324,3 +324,26 @@
                 (apply boolean=? (cons b (cons (car m) (cdr m))))
                 #f)
             (or (and a b) (and (not a) (not b))))))
+
+(define _some-null?
+    (lambda (list)
+        (and (pair? list)
+             (or (null? (car list))
+                 (_some-null? (cdr list))))))
+
+
+(define _nv-map
+    (lambda (function list)
+        (if (null? list)
+            '()
+            (cons (function (car list))
+                (_nv-map function (cdr list))))))
+
+(define map 
+    (lambda (function list1 . more-lists)
+        (let ((lists (cons list1 more-lists)))
+            (if (_some-null? lists)
+                '()
+                (cons (apply function (_nv-map car lists))
+                    (apply map function (_nv-map cdr lists)))))))
+

@@ -24,6 +24,14 @@
       ((w y) 'semivowel)
       (else => (lambda (x) x)))
 
+(map (lambda (x)
+        (case x
+            ((a e i o u) => (lambda (w) (cons 'vowel w)))
+            ((w y) (cons 'semivowel x))
+            (else => (lambda (w) (cons 'other w)))))
+        '(z y x w u))
+
+
 (and (= 2 2) (> 2 1))
 (and (= 2 2) (< 2 1))
 (and 1 2 'c '(f g))
@@ -37,6 +45,7 @@ equal
 2
 composite
 c
+((other . z) (semivowel . y) (other . x) (semivowel . w) (vowel . u))
 #t
 #f
 (f g)

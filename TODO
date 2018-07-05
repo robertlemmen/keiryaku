@@ -27,4 +27,5 @@ performance
 -----------
 - symbols could be flyweights, perhaps not so great when we do boxed lookups?
 - symbol lookup in env could use binary tree?
-- symbols could be replaced by boxes during lookup?
+- symbols could be replaced by boxes during lookup? or the lookup could be
+  cached?
