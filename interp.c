@@ -111,15 +111,16 @@ struct interp* interp_new(struct allocator *alloc) {
 
     bind_builtins(alloc, ret->top_env);
 
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"), VALUE_SP_IF);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"),     VALUE_SP_IF);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "lambda"), VALUE_SP_LAMBDA);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "begin"), VALUE_SP_BEGIN);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "quote"), VALUE_SP_QUOTE);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"), VALUE_SP_LET);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"), VALUE_SP_APPLY);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"), VALUE_SP_SET);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"), VALUE_SP_EVAL);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "begin"),  VALUE_SP_BEGIN);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "quote"),  VALUE_SP_QUOTE);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"),    VALUE_SP_LET);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let*"),   VALUE_SP_LETS);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"),  VALUE_SP_APPLY);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"),   VALUE_SP_SET);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"),   VALUE_SP_EVAL);
 
     return ret;
 }
@@ -360,6 +361,8 @@ tailcall_label:
                         return pos_args[0];
                         break;
                     case VALUE_SP_LET:
+                        // deliberate fallthrough
+                    case VALUE_SP_LETS:
                         arg_count = interp_collect_list(args, 2, pos_args);
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'let': expected 2 args but got %i\n",
@@ -380,7 +383,13 @@ tailcall_label:
                                 fprintf(stderr, "first part of arg binding to let is not a symbol\n");
                                 return VALUE_NIL;
                             }
-                            value arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->env);
+                            value arg_value;
+                            if (special == VALUE_SP_LETS) {
+                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->extra_env);
+                            }
+                            else {
+                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->env);
+                            }
                             env_bind(i->alloc, f->extra_env, arg_name, arg_value);
                             current_arg = cdr(current_arg);
                         }
