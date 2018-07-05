@@ -57,6 +57,16 @@
         (apply op list)))
 
 (apply mything + '(1 2 3))
+(define count
+    (lambda (list)
+        (if (null? list)
+            0
+            (+ 1 (count (cdr list))))))
+(apply + '(100 11))
+(apply + '(4 5 6))
+(apply + '(5 6))
+(apply count '((4 5 6)))
+(apply count '((list 4 5 6)))
 ===
 9
 720
@@ -80,3 +90,9 @@
 10
 12
 6
+111
+15
+11
+3
+4
+

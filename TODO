@@ -1,6 +1,5 @@
 language completeness
 ---------------------
-- implement (apply ...) properly
 - even more "derived" tests from chibi source
 - turn push-parsing into proper REPL, towards (include ...)
 - assoc shoudl support 3-arity comparator case, see member

@@ -261,6 +261,7 @@ tailcall_label:
             break;
 
         case TYPE_CONS:;
+            int arg_count;
             value op = f->locals[0] = interp_eval_env(i, f, car(f->expr), f->env); 
             if (op == VALUE_NIL) {
                 // XXX is this right? what if the cdr is set?
@@ -270,7 +271,6 @@ tailcall_label:
                 value special = op;
                 value args = cdr(f->expr);
                 value pos_args[3];
-                int arg_count;
                 switch (special) {
                     case VALUE_SP_IF:
                         arg_count = interp_collect_list(args, 3, pos_args);
@@ -390,48 +390,41 @@ tailcall_label:
                         goto tailcall_label;
                         break;
                     case VALUE_SP_APPLY:;
-                        // apply is variadic, so collect the args into a list.
-                        // also count while we are at it. the last item must be
-                        // a list, and will just be appended to out list
-                        value ca = args;
-                        f->locals[1] = VALUE_EMPTY_LIST;
-                        value prev = VALUE_NIL;
-                        value prev_prev = VALUE_NIL;
                         arg_count = 0;
+                        value ca = args;
                         while (value_type(ca) == TYPE_CONS) {
-                            value nc;
-                            if (arg_count == 0) {
-                                nc = car(ca);
-                            }
-                            else {
-                                //nc = car(ca);
-                                nc = interp_eval_env(i, f, car(ca), f->env);
-                            }
-                            nc = make_cons(i->alloc, nc, VALUE_EMPTY_LIST);
-                            if (prev == VALUE_NIL) {
-                                f->locals[1] = nc;
-                            }
-                            else {
-                                set_cdr(prev, nc);
-                            }
-                            prev_prev = prev;
-                            prev = nc;
+                            // XXX check overflows
+                            f->locals[arg_count] = interp_eval_env(i, f, car(ca), f->env);
                             ca = cdr(ca);
                             arg_count++;
                         }
                         if (arg_count < 2) {
-                            fprintf(stderr, "Arity error in application of special 'apply': expected 2 or mote args but got %i\n",
+                            fprintf(stderr, "Arity error in application of special 'apply': expected 2 or more args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (value_type(prev) != TYPE_CONS) {
+                        if (   (value_type(f->locals[arg_count-1]) != TYPE_CONS) 
+                            && (f->locals[arg_count-1] != VALUE_EMPTY_LIST) ) {
                             fprintf(stderr, "Error in application of special 'apply': last argument is not a list\n");
                             return VALUE_NIL;
                         }
-                        set_cdr(prev_prev, car(prev));
-                        f->expr = f->locals[1];
-                        f->locals[1] = VALUE_NIL;
-                        goto tailcall_label;
+                        ca = f->locals[arg_count-1];
+                        arg_count--;
+                        while (value_type(ca) == TYPE_CONS) {
+                            // XXX check overflows
+                            f->locals[arg_count] = car(ca);
+                            ca = cdr(ca);
+                            arg_count++;
+                        }
+                        // so far we have treated the first arg as an arg, but
+                        // in eval it is the op 
+                        arg_count--;
+                        op = f->locals[0];
+                        // XXX check that the operator is not a special
+                        // arg_count and f->locals is set up correctly, just
+                        // jump to the eval logic after its own evaluation of
+                        // arguments
+                        goto apply_eval_label;
                         break;
                     case VALUE_SP_SET:
                         // XXX perhaps this should not be allowed to redefined
@@ -476,7 +469,7 @@ tailcall_label:
                 // could goto from the apply special after it has set up the
                 // arguments, avoiding code duplication
                 value pos_args[NUM_LOCALS];
-                int arg_count = interp_collect_list(cdr(f->expr), NUM_LOCALS, pos_args);
+                arg_count = interp_collect_list(cdr(f->expr), NUM_LOCALS, pos_args);
                 if (arg_count == NUM_LOCALS) {
                     // XXX implement overflow logic
                     fprintf(stderr, "Currently only %d args are supported\n",  NUM_LOCALS - 1);
@@ -486,6 +479,7 @@ tailcall_label:
                 for (int j = 0; j < arg_count; j++) {
                     f->locals[j+1] = interp_eval_env(i, f, pos_args[j], f->env);
                 }
+apply_eval_label:
                 // XXX this is where we could jump to from the APPLY!
                 if (value_type(op) == TYPE_BUILTIN) {
                     if (builtin_arity(op) == BUILTIN_ARITY_VARIADIC) {
