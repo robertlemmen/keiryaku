@@ -12,6 +12,7 @@ core features
 technicalities
 --------------
 - support #true and #false long forms in parser
+- implement argument overflow logic in inter.c eval frame
 - equals? needs implementation for vectors
 - equals? should support cyclic structres, also dump_values and list?
 - reduce includes-graph

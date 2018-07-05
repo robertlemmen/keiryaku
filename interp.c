@@ -193,7 +193,10 @@ int interp_count_nonlist(value expr, bool *well_formed) {
     return ret;
 }
 
-#define NUM_LOCALS  5
+// XXX currently we are limited to that many arguments for most calls, which is
+// silly. but the call frame should be of limited size. so we need some sort of 
+// overflow mechanism. or we always use a list...
+#define NUM_LOCALS  7
 
 struct call_frame {
     value expr;                     // expr to be evaluated in this frame
@@ -300,16 +303,8 @@ tailcall_label:
                                 value_type(pos_args[0]));
                             return VALUE_NIL;
                         }
-            /* XXX this breaks the tail-call idea of passing the env around. perhaps it's
-            * not needed anyway? 
-                        if (i->current_env) {
-                            i->current_env = env_bind(i->alloc, i->current_env, pos_args[0], VALUE_NIL);
-                            i->current_env->value = interp_eval(i, pos_args[1]);
-                        }
-                        else {*/
-                            env_bind(i->alloc, f->env, pos_args[0], 
-                                interp_eval_env(i, f, pos_args[1], f->env));
-            //            }
+                        env_bind(i->alloc, f->env, pos_args[0], 
+                            interp_eval_env(i, f, pos_args[1], f->env));
                         // XXX or what does it return?
                         return VALUE_NIL;
                         break;
@@ -451,7 +446,7 @@ tailcall_label:
                         if (!value_is_symbol(pos_args[0])) {
                             fprintf(stderr, "Type error in application of special 'set!': expected a symbol args but got %li\n",
                                 // XXX we should have a textual type, just for error
-                                // repoting and logging
+                                // reporting and logging
                                 value_type(pos_args[0]));
                             return VALUE_NIL;
                         }
@@ -475,143 +470,122 @@ tailcall_label:
                         return VALUE_NIL;
                 }
             }
-            else if (value_type(op) == TYPE_BUILTIN) {
-                if (builtin_arity(op) == BUILTIN_ARITY_VARIADIC) {
-                    value current_arg = cdr(f->expr);
-                    f->locals[1] = VALUE_EMPTY_LIST;
-                    value out_ca = VALUE_NIL;
-                    while (value_type(current_arg) == TYPE_CONS) {
-                        value temp = make_cons(i->alloc,
-                                               interp_eval_env(i, f, car(current_arg), f->env),
-                                               VALUE_EMPTY_LIST);
-                        if (f->locals[1] == VALUE_EMPTY_LIST) {
-                            f->locals[1] = temp;
-                        }
-                        else {
-                            set_cdr(out_ca, temp);
-                        }
-                        out_ca = temp;
-                        current_arg = cdr(current_arg);
-                    }
-                    t_builtinv funcptr = builtinv_ptr(op);
-                    return funcptr(i->alloc, f->locals[1]);
-                }
-                else if (builtin_arity(op) == 0) {
-                    t_builtin0 funcptr = builtin0_ptr(op);
-                    value pos_args[0];
-                    int arg_count = interp_collect_list(cdr(f->expr), 0, pos_args);
-                    if (arg_count != 0) {
-                        fprintf(stderr, "Arity error in application of builtin: expected 0 args but got %i\n",
-                            arg_count);
-                        return VALUE_NIL;
-                    }
-                    return funcptr(i->alloc);
-                }
-                else if (builtin_arity(op) == 1) {
-                    t_builtin1 funcptr = builtin1_ptr(op);
-                    value pos_args[1];
-                    int arg_count = interp_collect_list(cdr(f->expr), 1, pos_args);
-                    if (arg_count != 1) {
-                        fprintf(stderr, "Arity error in application of builtin: expected 1 args but got %i\n",
-                            arg_count);
-                        return VALUE_NIL;
-                    }
-                    return funcptr(i->alloc, interp_eval_env(i, f, pos_args[0], f->env));
-                }
-                else if (builtin_arity(op) == 2) {
-                    t_builtin2 funcptr = builtin2_ptr(op);
-                    value pos_args[2];
-                    int arg_count = interp_collect_list(cdr(f->expr), 2, pos_args);
-                    if (arg_count != 2) {
-                        fprintf(stderr, "Arity error in application of builtin: expected 2 args but got %i\n",
-                            arg_count);
-                        return VALUE_NIL;
-                    }
-                    f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
-                    f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
-                    return funcptr(i->alloc, f->locals[2], f->locals[3]);
-                }
-                else if (builtin_arity(op) == 3) {
-                    t_builtin3 funcptr = builtin3_ptr(op);
-                    value pos_args[3];
-                    int arg_count = interp_collect_list(cdr(f->expr), 3, pos_args);
-                    if (arg_count != 3) {
-                        fprintf(stderr, "Arity error in application of builtin: expected 3 args but got %i\n",
-                            arg_count);
-                        return VALUE_NIL;
-                    }
-                    f->locals[2] = interp_eval_env(i, f, pos_args[0], f->env);
-                    f->locals[3] = interp_eval_env(i, f, pos_args[1], f->env);
-                    f->locals[4] = interp_eval_env(i, f, pos_args[2], f->env);
-                    return funcptr(i->alloc, f->locals[2], f->locals[3], f->locals[4]);
-                }
-                else {
-                    fprintf(stderr, "Unsupported builtin arity %d\n", builtin_arity(op));
+            else {
+                // XXX we could have one block for both builtins and lambdas, where
+                // at the very start we would evaluate all arguments. this way we
+                // could goto from the apply special after it has set up the
+                // arguments, avoiding code duplication
+                value pos_args[NUM_LOCALS];
+                int arg_count = interp_collect_list(cdr(f->expr), NUM_LOCALS, pos_args);
+                if (arg_count == NUM_LOCALS) {
+                    // XXX implement overflow logic
+                    fprintf(stderr, "Currently only %d args are supported\n",  NUM_LOCALS - 1);
                     return VALUE_NIL;
                 }
-            }
-            else if (value_type(op) == TYPE_INTERP_LAMBDA) {
-                struct interp_lambda *lambda = value_to_interp_lambda(op);
-                int application_arity = interp_count_list(cdr(f->expr));
-                // XXX feels as if we can just reuse the current environment if
-                // ->outer is lambda->env, btu somehow that doesn't work...
-                f->extra_env = env_new(i->alloc, lambda->env);
-                if (lambda->variadic) {
-                    int ax;
-                    // XXX this does not need to be a local
-                    f->locals[2] = cdr(f->expr);
-                    for (ax = 0; ax < lambda->arity - 1; ax++) {
-                        value t = interp_eval_env(i, f, car(f->locals[2]), f->env);
-                        env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], t);
-                        f->locals[2] = cdr(f->locals[2]);
-                    }
-                    f->locals[1] = VALUE_EMPTY_LIST;
-                    value out_ca = VALUE_NIL;
-                    value current_arg = f->locals[2];
-                    // XXX some of this list-building is nicer in the variadic
-                    // builtin case below
-                    for (int idx = ax; idx < application_arity; idx++) {
-                        f->locals[2] = make_cons(i->alloc, interp_eval_env(i, f, car(current_arg), f->env), VALUE_EMPTY_LIST);
-                        current_arg = cdr(current_arg);
-                        if (f->locals[1] == VALUE_EMPTY_LIST) {
-                            f->locals[1] = f->locals[2];
-                            out_ca = f->locals[2];
+                // evaluate all arguments
+                for (int j = 0; j < arg_count; j++) {
+                    f->locals[j+1] = interp_eval_env(i, f, pos_args[j], f->env);
+                }
+                // XXX this is where we could jump to from the APPLY!
+                if (value_type(op) == TYPE_BUILTIN) {
+                    if (builtin_arity(op) == BUILTIN_ARITY_VARIADIC) {
+                        value arg_list = VALUE_EMPTY_LIST;
+                        value current_arg = VALUE_NIL;
+                        for (int j = 0; j < arg_count; j++) {
+                            value temp = make_cons(i->alloc,
+                                                f->locals[j+1],
+                                                VALUE_EMPTY_LIST);
+                            if (arg_list == VALUE_EMPTY_LIST) {
+                                arg_list = temp;
+                            }
+                            else {
+                                set_cdr(current_arg, temp);
+                            }
+                            current_arg = temp;
                         }
-                        else {
-                            set_cdr(out_ca, f->locals[2]);
-                            out_ca = f->locals[2];
+                        t_builtinv funcptr = builtinv_ptr(op);
+                        return funcptr(i->alloc, arg_list);
+                    }
+                    else {
+                        int op_arity = builtin_arity(op);
+                        if (op_arity != arg_count) {
+                            fprintf(stderr, "Arity error in application of builtin: expected %d args but got %d\n",
+                                op_arity, arg_count);
+                            return VALUE_NIL;
+                        }
+                        switch (op_arity) {
+                            case 0:;
+                                t_builtin0 funcptr0 = builtin0_ptr(op);
+                                return funcptr0(i->alloc);
+                                break;
+                            case 1:;
+                                t_builtin1 funcptr1 = builtin1_ptr(op);
+                                return funcptr1(i->alloc, f->locals[1]);
+                                break;
+                            case 2:;
+                                t_builtin2 funcptr2 = builtin2_ptr(op);
+                                return funcptr2(i->alloc, f->locals[1], f->locals[2]);
+                                break;
+                            case 3:;
+                                t_builtin3 funcptr3 = builtin3_ptr(op);
+                                return funcptr3(i->alloc, f->locals[1], f->locals[2], f->locals[3]);
+                                break;
+                            default:
+                                fprintf(stderr, "Unsupported builtin arity %d\n", builtin_arity(op));
+                                return VALUE_NIL;
                         }
                     }
-                    // XXX hmm, if we could bind arg_list first and set! in the
-                    // env, we could save one local...
-                    env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], f->locals[1]);
-                    f->locals[1] = VALUE_NIL;
+                }
+                else if (value_type(op) == TYPE_INTERP_LAMBDA) {
+                    // XXX feels as if we can just reuse the current environment if
+                    // ->outer is lambda->env, btu somehow that doesn't work...
+                    struct interp_lambda *lambda = value_to_interp_lambda(op);
+                    f->extra_env = env_new(i->alloc, lambda->env);
+                    if (lambda->variadic) {
+                        int ax;
+                        if (arg_count < lambda->arity - 1) {
+                            fprintf(stderr, "Arity error in application of variadic lambda: expected a minimum of %i args but got %i\n",
+                                lambda->arity, arg_count);
+                            return VALUE_NIL;
+                        }
+                        for (ax = 0; ax < lambda->arity - 1; ax++) {
+                            env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], f->locals[ax+1]);
+                        }
+                        value arg_list = VALUE_EMPTY_LIST;
+                        value current_arg = VALUE_NIL;
+                        for (int j = ax; j < arg_count; j++) {
+                            value temp = make_cons(i->alloc,
+                                                f->locals[j+1],
+                                                VALUE_EMPTY_LIST);
+                            if (arg_list == VALUE_EMPTY_LIST) {
+                                arg_list = temp;
+                            }
+                            else {
+                                set_cdr(current_arg, temp);
+                            }
+                            current_arg = temp;
+                        }
+                        env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], arg_list);
+                    }
+                    else {
+                        if (lambda->arity != arg_count) {
+                            fprintf(stderr, "Arity error in application of lambda: expected %i args but got %i\n",
+                                lambda->arity, arg_count);
+                            return VALUE_NIL;
+                        }
+                        for (int idx = 0; idx < arg_count; idx++) {
+                            env_bind(i->alloc, f->extra_env, lambda->arg_names[idx], f->locals[idx+1]);
+                        }
+                    }
+                    f->expr = lambda->body;
+                    f->env = f->extra_env;
+                    f->extra_env = NULL;
+                    goto tailcall_label;
                 }
                 else {
-                    if (lambda->arity != application_arity) {
-                        fprintf(stderr, "Arity error in application of lambda: expected %i args but got %i\n",
-                            lambda->arity, application_arity);
-                        return VALUE_NIL;
-                    }
-                    // XXX this does not need to be a local
-                    f->locals[2] = cdr(f->expr);
-                    for (int idx = 0; idx < application_arity; idx++) {
-                        value t = interp_eval_env(i, f, car(f->locals[2]), f->env);
-                        env_bind(i->alloc, f->extra_env, lambda->arg_names[idx], t);
-                        f->locals[2] = cdr(f->locals[2]);
-                    }
-                    f->locals[2] = VALUE_NIL;
+                    fprintf(stderr, "No idea how to apply operator of type 0x%lX\n", value_type(op));
+                    return VALUE_NIL;
                 }
-                // XXX is there a way to not allocate an env in all
-                // cases? perhaps we can reuse the one we have in recursions?
-                f->expr = lambda->body;
-                f->env = f->extra_env;
-                f->extra_env = NULL;
-                goto tailcall_label;
-            }
-            else {
-                fprintf(stderr, "No idea how to apply operator of type 0x%lX\n", value_type(op));
-                return VALUE_NIL;
             }
             break;
         default:
