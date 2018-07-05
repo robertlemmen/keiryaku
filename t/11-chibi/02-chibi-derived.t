@@ -39,6 +39,14 @@
 (or (= 2 2) (> 2 1))
 (or (= 2 2) (< 2 1))
 (or #f #f #f)
+(or (memq 'b '(a b c))
+    (/ 3 0))
+(let ((x 2) (y 3))
+  (* x y))
+(let ((x 2) (y 3))
+  (let ((x 7)
+        (z (+ x y)))
+    (* z x)))
 ===
 greater
 equal
@@ -53,3 +61,7 @@ c
 #t
 #t
 #f
+(b c)
+6
+35
+
