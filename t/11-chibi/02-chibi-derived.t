@@ -51,6 +51,27 @@
   (let* ((x 7)
          (z (+ x y)))
     (* z x)))
+(letrec [(even?
+            (lambda (n)
+                (if (zero? n)
+                    #t
+                    (odd? (- n 1)))))
+         (odd?
+            (lambda (n)
+                (if (zero? n)
+                    #f
+                    (even? (- n 1)))))]
+    (even? 88))
+
+(letrec* [(p (lambda (x)
+                (+ 1 (q (- x 1)))))
+          (q (lambda (y)
+                (if (zero? y)
+                    0
+                    (+ 1 (p (- y 1))))))
+          (x (p 5))
+          (y x)]
+            y)
 ===
 greater
 equal
@@ -69,3 +90,5 @@ c
 6
 35
 70
+#t
+5

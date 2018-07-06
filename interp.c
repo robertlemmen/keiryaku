@@ -111,16 +111,19 @@ struct interp* interp_new(struct allocator *alloc) {
 
     bind_builtins(alloc, ret->top_env);
 
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"),     VALUE_SP_IF);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "define"), VALUE_SP_DEFINE);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "lambda"), VALUE_SP_LAMBDA);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "begin"),  VALUE_SP_BEGIN);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "quote"),  VALUE_SP_QUOTE);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"),    VALUE_SP_LET);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let*"),   VALUE_SP_LETS);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"),  VALUE_SP_APPLY);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"),   VALUE_SP_SET);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"),   VALUE_SP_EVAL);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"),      VALUE_SP_IF);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "define"),  VALUE_SP_DEFINE);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "lambda"),  VALUE_SP_LAMBDA);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "begin"),   VALUE_SP_BEGIN);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "quote"),   VALUE_SP_QUOTE);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"),     VALUE_SP_LET);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let*"),    VALUE_SP_LETS);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "letrec"),  VALUE_SP_LETREC);
+    // our (letrec ...) already behaves like (letrec* ...)
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "letrec*"), VALUE_SP_LETREC);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"),   VALUE_SP_APPLY);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"),    VALUE_SP_SET);
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"),    VALUE_SP_EVAL);
 
     return ret;
 }
@@ -361,16 +364,25 @@ tailcall_label:
                         return pos_args[0];
                         break;
                     case VALUE_SP_LET:
-                        // deliberate fallthrough
                     case VALUE_SP_LETS:
+                    case VALUE_SP_LETREC:
                         arg_count = interp_collect_list(args, 2, pos_args);
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'let': expected 2 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        value current_arg = pos_args[0];
                         f->extra_env = env_new(i->alloc, f->env);
+                        value current_arg = pos_args[0];
+                        if (special == VALUE_SP_LETREC) {
+                            while (value_type(current_arg) == TYPE_CONS) {
+                                value arg_pair = car(current_arg);
+                                value arg_name = car(arg_pair);
+                                env_bind(i->alloc, f->extra_env, arg_name, VALUE_NIL);
+                                current_arg = cdr(current_arg);
+                            }
+                            current_arg = pos_args[0];
+                        }
                         while (value_type(current_arg) == TYPE_CONS) {
                             value arg_pair = car(current_arg);
                             if (value_type(arg_pair) != TYPE_CONS) {
@@ -384,11 +396,11 @@ tailcall_label:
                                 return VALUE_NIL;
                             }
                             value arg_value;
-                            if (special == VALUE_SP_LETS) {
-                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->extra_env);
+                            if (special == VALUE_SP_LET) {
+                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->env);
                             }
                             else {
-                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->env);
+                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->extra_env);
                             }
                             env_bind(i->alloc, f->extra_env, arg_name, arg_value);
                             current_arg = cdr(current_arg);

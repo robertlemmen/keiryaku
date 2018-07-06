@@ -112,9 +112,10 @@ typedef uint64_t value;
 #define VALUE_SP_QUOTE   0b010010000
 #define VALUE_SP_LET     0b010110000
 #define VALUE_SP_LETS    0b011010000
-#define VALUE_SP_APPLY   0b011110000
-#define VALUE_SP_SET     0b100010000
-#define VALUE_SP_EVAL    0b100110000
+#define VALUE_SP_LETREC  0b011110000
+#define VALUE_SP_APPLY   0b100010000
+#define VALUE_SP_SET     0b100110000
+#define VALUE_SP_EVAL    0b101010000
 
 #define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 
