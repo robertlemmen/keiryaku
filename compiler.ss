@@ -219,13 +219,26 @@
         (compile-let
             (lambda (ex _compile)
                 (if (null? (cddr ex))
-                    (cons 'let ex)
+                    (cons 'let (_compile ex))
+                    ; XXX second case most likely needs a compile as well!
                     (list 'let (car ex) (cons 'begin (cdr ex))))))
         (compile-arity2-member
             (lambda (ex _compile)
                 (if (null? (cddr ex))
                     (list '_memberg (car ex) (cadr ex) 'equal?)
                     (cons '_memberg ex))))
+        (compile-do
+            (lambda (ex _compile)
+                (let [(var-list (map car (car ex)))
+                    (initial-vals  (map cadr (car ex)))
+                    (test (caadr ex))
+                    (retval (car (cdadr ex)))
+                    (increment (map (lambda (x) (if (null? (cddr x)) (car x) (caddr x))) (car ex)))
+        ; XXX using an empty list here is a bit ugly, we should really not use a body at
+        ; all!
+                    (body (if (pair? (cddr ex)) (caddr ex) '()))]
+                    (_compile (list 'letrec* (list (list '_body (list 'lambda var-list (list 'if test retval 
+                        (list 'begin body (cons '_body increment)))))) (cons '_body initial-vals))))))
         ]
         (lambda (ex)
             (if (pair? ex)
@@ -247,7 +260,9 @@
                                                 ex
                                                 (if (eq? (car ex) 'make-vector)
                                                     (compile-make-vector (cdr ex) _compile)
-                                                    (cons (_compile (car ex)) (_compile (cdr ex))))))))))))
+                                                    (if (eq? (car ex) 'do)
+                                                        (compile-do (cdr ex) _compile)
+                                                        (cons (_compile (car ex)) (_compile (cdr ex)))))))))))))
                 ex))))
 
 ; some base environment, should probably be separate from compiler, and should

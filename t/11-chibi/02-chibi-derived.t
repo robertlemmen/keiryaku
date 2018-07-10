@@ -72,6 +72,15 @@
           (x (p 5))
           (y x)]
             y)
+(do ((vec (make-vector 5))
+     (i 0 (+ i 1)))
+    ((= i 5) vec)
+  (vector-set! vec i i))
+
+(let ((x '(1 3 5 7 9)))
+  (do ((x x (cdr x))
+       (sum 0 (+ sum (car x))))
+      ((null? x) sum)))
 ===
 greater
 equal
@@ -92,3 +101,5 @@ c
 70
 #t
 5
+#(0 1 2 3 4)
+25

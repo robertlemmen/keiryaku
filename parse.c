@@ -240,9 +240,6 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {
     }
 
     if (!p->exp_stack_top) {
-        // XXX we should have a callback that gets called with an expression,
-        // and msot of this block should be in there. this way the parser also
-        // does not need to know about the interpreter
         // we have a fully parsed expression, compile it
         p->callback(cv, p->cb_arg);
     }
