@@ -1,14 +1,14 @@
-CFLAGS=-std=c11 -D_GNU_SOURCE -pthread -Wall -g
-CC=gcc
-TARGET=keiryaku
+CFLAGS ?= -std=c11 -D_GNU_SOURCE -pthread -Wall -g
+CC := gcc
+TARGET := keiryaku
 
-SOURCES=$(shell ls *.c)
-OBJECTS=$(subst .c,.o,$(SOURCES))
+SOURCES := $(shell ls *.c)
+OBJECTS := $(subst .c,.o,$(SOURCES))
 
-GIT_HASH=$(shell git log -1 --pretty=format:g%h)
-GIT_DIRTY=$(shell git describe --all --long --dirty | grep -q dirty && echo 'dirty' || true)
-GIT_TAG=$(shell git describe --exact-match 2>/dev/null || true)
-VERSION_STRING=$(if $(GIT_TAG),$(GIT_TAG),$(GIT_HASH))$(if $(GIT_DIRTY), (dirty),)
+GIT_HASH := $(shell git log -1 --pretty=format:g%h)
+GIT_DIRTY := $(shell git describe --all --long --dirty | grep -q dirty && echo 'dirty' || true)
+GIT_TAG := $(shell git describe --exact-match 2>/dev/null || true)
+VERSION_STRING := $(if $(GIT_TAG),$(GIT_TAG),$(GIT_HASH))$(if $(GIT_DIRTY), (dirty),)
 
 .PHONY: clean test version.c
 

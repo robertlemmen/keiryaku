@@ -49,7 +49,14 @@ value env_lookup(struct interp_env *env, value symbol) {
             if (!value_is_symbol(ee->name)) {
                 assert(value_is_symbol(ee->name));
             }
-            if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
+            if (   (value_type(ee->name) == TYPE_SHORT_SYMBOL) 
+                && (value_type(symbol) == TYPE_SHORT_SYMBOL)
+                && (ee->name == symbol) ) {
+                return ee->value;
+            }
+            if (   (value_type(ee->name) == TYPE_SYMBOL) 
+                && (value_type(symbol) == TYPE_SYMBOL)
+                && (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) ) {
                 return ee->value;
             }
             ee = ee->next;

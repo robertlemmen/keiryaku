@@ -1,0 +1,17 @@
+#!/bin/bash
+
+set -e
+
+rm -f all-tests.ss
+for i in `seq 1 10`; do
+    for tf in $(find t -name "*.t" | sort); do 
+        [ -e "$tf" ] || continue; 
+        cat $tf | grep -v "^;" | sed '/===/,$d' >> all-tests.ss
+    done
+done
+
+make clean
+CFLAGS="-O2 -pg -no-pie" make
+echo "running benchmark..."
+./keiryaku < all-tests.ss > /dev/null
+gprof ./keiryaku

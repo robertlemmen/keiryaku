@@ -15,6 +15,7 @@ technicalities
 - equals? needs implementation for vectors
 - equals? should support cyclic structres, also dump_values and list?
 - reduce includes-graph
+- avoid relink without source change due to version.c
 
 memory management
 -----------------
