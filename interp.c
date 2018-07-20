@@ -125,6 +125,9 @@ struct interp* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"),    VALUE_SP_SET);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"),    VALUE_SP_EVAL);
 
+    // required for (interaction-environment)
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "_top_env"), make_environment(alloc, ret->top_env));
+
     return ret;
 }
 
@@ -470,13 +473,18 @@ tailcall_label:
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_EVAL:
-                        arg_count = interp_collect_list(args, 1, pos_args);
-                        if (arg_count != 1) {
+                        arg_count = interp_collect_list(args, 2, pos_args);
+                        struct interp_env *eval_env = f->env;
+                        if (arg_count == 2) {
+                            eval_env = value_to_environment(interp_eval_env(i, f, pos_args[1], f->env));
+                        }
+                        else if (arg_count != 1) {
                             fprintf(stderr, "Arity error in application of special 'eval': expected 1 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
                         f->expr = interp_eval_env(i, f, pos_args[0], f->env);
+                        f->env = eval_env;
                         goto tailcall_label;
                         break;
                     default:

@@ -276,3 +276,12 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v) {
         allocator_gc_add_root(gc, body[i+1]);
     }
 }
+
+value make_environment(struct allocator *a, struct interp_env *env) {
+    return (uint64_t)env | TYPE_ENV;
+}
+
+struct interp_env* value_to_environment(value v) {
+    assert(value_type(v) == TYPE_ENV);
+    return (struct interp_env*)value_to_cell(v);
+}

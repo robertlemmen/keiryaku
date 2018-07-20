@@ -7,14 +7,11 @@
 #include <getopt.h>
 #include <pwd.h>
 
-#include "linenoise/linenoise.c"
 #include "heap.h"
 #include "parse.h"
 #include "interp.h"
 #include "version.h"
 #include "global.h"
-
-// XXX experiments
 #include "ports.h"
 
 #define BUFSIZE 4096
@@ -82,12 +79,8 @@ static void parser_callback(value expr, void *arg) {
         dump_value(expr, stdout);
         printf("\n");
     }
-    // we now have something potentially executable, so evaluate it
-    value result = interp_eval(pargs->i, expr);
-    if (result != VALUE_NIL) {
-        dump_value(result, stdout);
-        printf("\n");
-    }
+    // execute it!
+    interp_eval(pargs->i, expr);
 }
 
 int main(int argc, char **argv) {
@@ -139,15 +132,6 @@ int main(int argc, char **argv) {
 
     if (isatty(fileno(stdin))) {
         printf("-=[ keiryaku %s ]=-\n\n", software_version());
-        linenoiseSetMultiLine(1);
-        linenoiseHistorySetMaxLen(1024);
-        const char *homedir;
-        if ((homedir = getenv("HOME")) == NULL) {
-            homedir = getpwuid(getuid())->pw_dir;
-        }
-        history_file = malloc(strlen(homedir) + strlen("/.keiryaku_history") + 1);
-        sprintf(history_file, "%s/.keiryaku_history", homedir);
-        linenoiseHistoryLoad(history_file);
     }
 
     struct allocator *a = allocator_new();
@@ -157,10 +141,16 @@ int main(int argc, char **argv) {
     pargs.a = a;
     struct parser *p = parser_new(a, &parser_callback, &pargs);
 
-    // XXX debug/experiments
-    env_bind(a, interp_top_env(i), 
-        make_symbol(a, "stdin"),
-        port_new(a, stdin, true, false, true, false));
+    if (isatty(fileno(stdin))) {
+        env_bind(a, interp_top_env(i), 
+            make_symbol(a, "stdin"),
+            port_new_tty(a));
+    }
+    else {
+        env_bind(a, interp_top_env(i), 
+            make_symbol(a, "stdin"),
+            port_new(a, stdin, true, false, true, false));
+    }
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stdout"),
         port_new(a, stdout, false, true, true, false));
@@ -172,23 +162,7 @@ int main(int argc, char **argv) {
         consume_file(p, "compiler.ss");
     }
 
-    if (isatty(fileno(stdin))) {
-        char *input;
-        char buffer[BUFSIZE];
-        int pos = 0;
-        while ((input = linenoise("> ")) != NULL) {
-            strncpy(&buffer[pos], input, BUFSIZE-pos-1);
-            pos = parser_consume(p, buffer);
-            strncpy(&buffer[pos], "\n", BUFSIZE-pos-1);
-            pos = parser_consume(p, buffer);
-            linenoiseHistoryAdd(input);
-            free(input);
-        }
-        linenoiseHistorySave(history_file);
-    }
-    else {
-        consume_stream(p, stdin);
-    }
+    consume_file(p, "repl.ss");
 
     if (arg_debug) {
         interp_gc(i);

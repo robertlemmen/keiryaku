@@ -11,6 +11,8 @@ struct allocator;
 // XXX we need some sort of destructor to close the fd when we garbage-collect
 // the object
 value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bool binary);
+// cosntruct a readline-enabled tty input
+value port_new_tty(struct allocator *a);
 bool port_in(value p);
 bool port_out(value p);
 bool port_text(value p);

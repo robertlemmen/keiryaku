@@ -57,6 +57,7 @@
  *   100_ - interpreter lambda
  *   101_ - vector
  *   110_ - port
+ *   111_ - environment
  *
  *   XXX will need a "other" non-immediate where the actual type is only stored
  *   on the heap, sadly
@@ -96,6 +97,7 @@ typedef uint64_t value;
 #define TYPE_INTERP_LAMBDA    0b1001
 #define TYPE_VECTOR           0b1011
 #define TYPE_PORT             0b1101
+#define TYPE_ENV              0b1111
 
 // XXX we should not need a nil, but then we need to make sure there are no CONS
 // that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
@@ -219,5 +221,11 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v);
  * */
 // XXX whether these should be in here or in ports is questionable...
 void dump_value(value v, FILE *f);
+
+/* Environment references
+ * */
+struct interp_env;
+value make_environment(struct allocator *a, struct interp_env *env);
+struct interp_env* value_to_environment(value v);
 
 #endif /* TYPES_H */

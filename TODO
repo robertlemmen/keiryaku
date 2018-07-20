@@ -1,8 +1,9 @@
 language completeness
 ---------------------
+- (include ...)
+- compiler support for port ops with default port
 - even more "derived" tests from chibi source
-- turn push-parsing into proper REPL, towards (include ...)
-- assoc shoudl support 3-arity comparator case, see member
+- assoc should support 3-arity comparator case, see member
 
 core features
 -------------
@@ -12,6 +13,7 @@ technicalities
 --------------
 - support #true and #false long forms in parser
 - implement argument overflow logic in inter.c eval frame
+- turn push-parsing into pulling style, move parser out of types
 - equals? needs implementation for vectors
 - equals? should support cyclic structres, also dump_values and list?
 - reduce includes-graph
