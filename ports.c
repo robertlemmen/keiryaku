@@ -4,6 +4,8 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <pwd.h>
+#include "linenoise/linenoise.c"
 
 #include "heap.h"
 #include "parse.h"
@@ -17,12 +19,16 @@ struct result_list_entry {
     struct result_list_entry *younger;
 };
 
+// XXX should perhaps be in struct?
+char *history_file = NULL;
+
 struct port {
     FILE *file;
     bool in:1;
     bool out:1;
     bool text:1;
     bool binary:1;
+    bool tty:1;
     int buf_pos;
     // XXX we only need a buffer and parser when we use (read ...) on this port,
     // not for e.g. text files. so this could be lazily allocated when needed
@@ -59,6 +65,7 @@ static void parser_callback(value expr, void *arg) {
 value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bool binary) {
     struct port *ps = allocator_alloc(a, sizeof(struct port));
     ps->file = file;
+    ps->tty = false;
     ps->in = in;
     ps->out = out;
     ps->text = text;
@@ -68,6 +75,33 @@ value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bo
     ps->result = VALUE_NIL;
     ps->result_overflow_youngest = NULL;
     ps->result_overflow_oldest = NULL;
+    return (uint64_t)ps | TYPE_PORT;
+}
+
+value port_new_tty(struct allocator *a) {
+    struct port *ps = allocator_alloc(a, sizeof(struct port));
+    ps->file = NULL;
+    ps->tty = true;
+    ps->in = true;
+    ps->text = true;
+    ps->out = false;
+    ps->binary = false;
+    ps->buf_pos = 0;
+    ps->p = parser_new(a, &parser_callback, ps);
+    ps->result = VALUE_NIL;
+    ps->result_overflow_youngest = NULL;
+    ps->result_overflow_oldest = NULL;
+
+    linenoiseSetMultiLine(1);
+    linenoiseHistorySetMaxLen(1024);
+    const char *homedir;
+    if ((homedir = getenv("HOME")) == NULL) {
+        homedir = getpwuid(getuid())->pw_dir;
+    }
+    history_file = malloc(strlen(homedir) + strlen("/.keiryaku_history") + 1);
+    sprintf(history_file, "%s/.keiryaku_history", homedir);
+    linenoiseHistoryLoad(history_file);
+
     return (uint64_t)ps | TYPE_PORT;
 }
 
@@ -124,7 +158,7 @@ value port_open_input_file(struct allocator *a, value filename) {
         // XXX need way to raise error
         exit(1);
     }
-    return port_new(a, fs, false, true, true, false);
+    return port_new(a, fs, true, false, true, false);
 }
 
 void port_close(value p) {
@@ -140,14 +174,32 @@ value port_read(value p) {
     assert(value_type(p) == TYPE_PORT);
     struct port *ps = (struct port*)value_to_cell(p);
     while (ps->result == VALUE_NIL) {
-        char *ret = fgets(&ps->buffer[ps->buf_pos], BUFSIZE - 1 - ps->buf_pos, ps->file);
-        if (!ret) {
-            if (feof(ps->file)) {
-                return VALUE_EOF;
+        if (ps->tty) {
+            char *input;
+            input = linenoise("> ");
+            if (input) {
+                strncpy(&ps->buffer[ps->buf_pos], input, BUFSIZE - ps->buf_pos - 1);
+                linenoiseHistoryAdd(input);
+                // XXX this is ugly and unsafe...
+                ps->buffer[ps->buf_pos + strlen(input)] = '\n';
+                ps->buffer[ps->buf_pos + strlen(input) + 1 ] = '\0';
+                linenoiseHistorySave(history_file);
+                free(input);
             }
             else {
-                // XXX need way to raise
-                fprintf(stderr, "NYI fgets error\n");
+                return VALUE_EOF;
+            }
+        }
+        else {
+            char *ret = fgets(&ps->buffer[ps->buf_pos], BUFSIZE - 1 - ps->buf_pos, ps->file);
+            if (!ret) {
+                if (feof(ps->file)) {
+                    return VALUE_EOF;
+                }
+                else {
+                    // XXX need way to raise
+                    fprintf(stderr, "NYI fgets error\n");
+                }
             }
         }
         ps->buf_pos = parser_consume(ps->p, ps->buffer);

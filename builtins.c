@@ -181,6 +181,12 @@ value builtin_null(struct allocator *alloc, value v) {
         : VALUE_FALSE;
 }
 
+value builtin_nil(struct allocator *alloc, value v) {
+    return (v == VALUE_NIL)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
 value builtin_number(struct allocator *alloc, value v) {
     return (value_type(v) == TYPE_INT)
         ? VALUE_TRUE
@@ -381,6 +387,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "eqv?"), make_builtin2(alloc, &builtin_eqv));
     env_bind(alloc, env, make_symbol(alloc, "equal?"), make_builtin2(alloc, &builtin_equal));
     env_bind(alloc, env, make_symbol(alloc, "null?"), make_builtin1(alloc, &builtin_null));
+    env_bind(alloc, env, make_symbol(alloc, "_nil?"), make_builtin1(alloc, &builtin_nil));
     env_bind(alloc, env, make_symbol(alloc, "number?"), make_builtin1(alloc, &builtin_number));
     env_bind(alloc, env, make_symbol(alloc, "string?"), make_builtin1(alloc, &builtin_string));
     env_bind(alloc, env, make_symbol(alloc, "symbol?"), make_builtin1(alloc, &builtin_symbol));
