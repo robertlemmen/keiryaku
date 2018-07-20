@@ -253,9 +253,8 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {
 #define S_HASH      4
 #define S_MINUS     5
 #define S_STRING    6
+#define S_HASHIDENT 7
 
-// XXX and EOF token would be interesting, would mean we can detect mismatched
-// parens easier...
 // XXX we should be able to treat things as ".+" as identifiers, see
 // 15-little-shadows.t
 int parser_tokenize(struct parser *p, char *data) {
@@ -289,6 +288,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 p->tokenizer_state = S_COMMENT;
             }
             else if (*cp == '#') {
+                mark = cp;
                 p->tokenizer_state = S_HASH;
             }
             else if (*cp == '"') {
@@ -360,15 +360,7 @@ int parser_tokenize(struct parser *p, char *data) {
             }
         }
         else if (p->tokenizer_state == S_HASH) {
-            if (*cp == 't') {
-                parser_parse(p, P_BOOL, 1, NULL);
-                p->tokenizer_state = S_INIT;
-            }
-            else if (*cp == 'f') {
-                parser_parse(p, P_BOOL, 0, NULL);
-                p->tokenizer_state = S_INIT;
-            }
-            else if (*cp == '(') {
+            if (*cp == '(') {
                 parser_parse(p, P_VECTOR, 0, NULL);
                 p->tokenizer_state = S_INIT;
             }
@@ -377,6 +369,12 @@ int parser_tokenize(struct parser *p, char *data) {
                 // lines. we could be stricter and only accept these at the very
                 // beginning of the file...
                 p->tokenizer_state = S_COMMENT;
+            }
+            else if (   (strchr("!$%&*/:<=>?^_~+", *cp) != NULL) 
+                     || ((*cp >= 'a') && (*cp <= 'z')) 
+                     || ((*cp >= 'A') && (*cp <= 'Z')) ) {
+                mark = cp;
+                p->tokenizer_state = S_HASHIDENT;
             }
             else {
                 fprintf(stderr, 
@@ -403,6 +401,44 @@ int parser_tokenize(struct parser *p, char *data) {
                 str[cp - mark] = '\0';
                 parser_parse(p, P_IDENT, 0, str);
                 free(str);
+                cp--;
+                mark = NULL;
+            }
+        }
+        else if (p->tokenizer_state == S_HASHIDENT) {
+            if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
+                || ((*cp >= 'a') && (*cp <= 'z')) 
+                || ((*cp >= '0') && (*cp <= '9')) 
+                || ((*cp >= 'A') && (*cp <= 'Z')) 
+                || (strchr("+-.@", *cp) != NULL) ) {
+                // still in hash identifier
+            }
+            else {
+                // end of identifier
+                if (((cp - mark) == 1) && (mark[0] == 't')) {
+                    parser_parse(p, P_BOOL, 1, NULL);
+                }
+                else if (((cp - mark) == 1) && (mark[0] == 'f')) {
+                    parser_parse(p, P_BOOL, 0, NULL);
+                }
+                else if (((cp - mark) == 4) && (strncmp(mark, "true", 4) == 0)) {
+                    parser_parse(p, P_BOOL, 1, NULL);
+                }
+                else if (((cp - mark) == 5) && (strncmp(mark, "false", 5) == 0)) {
+                    parser_parse(p, P_BOOL, 0, NULL);
+                }
+                else {
+                    char *str = malloc(cp - mark + 1);
+                    strncpy(str, mark, cp - mark);
+                    str[cp - mark] = '\0';
+                    parser_parse(p, P_IDENT, 0, str);
+                    fprintf(stderr, 
+                        "Unexpected hash identifier '#%s' in tokenizer state: %i\n", 
+                        str, p->tokenizer_state);
+                    free(str);
+                    exit(1);
+                }
+                p->tokenizer_state = S_INIT;
                 cp--;
                 mark = NULL;
             }

@@ -10,7 +10,6 @@ core features
 
 technicalities
 --------------
-- support #true and #false long forms in parser
 - implement argument overflow logic in inter.c eval frame
 - turn push-parsing into pulling style, move parser out of types
 - equals? needs implementation for vectors
