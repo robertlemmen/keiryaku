@@ -125,6 +125,7 @@ struct interp* interp_new(struct allocator *alloc) {
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"),    VALUE_SP_SET);
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"),    VALUE_SP_EVAL);
 
+    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "_nil"), VALUE_NIL);
     // required for (interaction-environment)
     env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "_top_env"), make_environment(alloc, ret->top_env));
 

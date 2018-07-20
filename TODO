@@ -1,6 +1,5 @@
 language completeness
 ---------------------
-- (include ...)
 - compiler support for port ops with default port
 - even more "derived" tests from chibi source
 - assoc should support 3-arity comparator case, see member
