@@ -18,7 +18,6 @@ technicalities
 - refactor type tagging, use all lower bits to signal immediate, to yield
   more non-immediate types
 - reduce includes-graph
-+ avoid relink without source change due to version.c
 - fix tabs in readline/linenoise
 
 memory management

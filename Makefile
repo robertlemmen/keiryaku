@@ -10,14 +10,9 @@ GIT_DIRTY := $(shell git describe --all --long --dirty | grep -q dirty && echo '
 GIT_TAG := $(shell git describe --exact-match 2>/dev/null || true)
 VERSION_STRING := $(if $(GIT_TAG),$(GIT_TAG),$(GIT_HASH))$(if $(GIT_DIRTY), (dirty),)
 
-.PHONY: clean test version.c
+.PHONY: clean test
 
-$(TARGET): $(OBJECTS) version.o
-	@echo "Linking $@..."
-	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^
-
-version.c:
-	@echo "Creating $@..."
+$(TARGET): $(OBJECTS)
 	@VERSION_STRING=$$GIT_TAG; \
 	 if [ ! -z "$$GIT_TAG" ]; \
 	 then \
@@ -25,13 +20,14 @@ version.c:
 	 fi; \
 	 export VERSION_STRING=test234; \
 	 cat version.c.template | sed -e 's/\%VERSION_STRING\%/$(VERSION_STRING)/' > version.c
+	@echo "Linking $@..."
+	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ version.c
+	@rm -f version.c
 
 %.o: %.c
 	@echo "Compiling $<..."
 	@$(CC) $(CFLAGS) $(CINCFLAGS) -c $<
 	@$(CC) -MM $(CFLAGS) $(CINCFLAGS) -c $< > $*.d
-
-version.o: version.c
 
 test: $(TARGET)
 	@echo "Running Tests..."
