@@ -1,12 +1,13 @@
 language completeness
 ---------------------
-- compiler support for port ops with default port
-- even more "derived" tests from chibi source
-- assoc should support 3-arity comparator case, see member
++ compiler support for port ops with default port
++ assoc should support 3-arity comparator case, see member
++ towards support for srfi-1
 
 core features
 -------------
-- call/cc
+- raise and friends
+- call/cc, also unlocks (values ...) and friends
 
 technicalities
 --------------
@@ -14,8 +15,11 @@ technicalities
 - turn push-parsing into pulling style, move parser out of types
 - equals? needs implementation for vectors
 - equals? should support cyclic structres, also dump_values and list?
+- refactor type tagging, use all lower bits to signal immediate, to yield
+  more non-immediate types
 - reduce includes-graph
-- avoid relink without source change due to version.c
++ avoid relink without source change due to version.c
+- fix tabs in readline/linenoise
 
 memory management
 -----------------
@@ -26,7 +30,6 @@ memory management
 
 performance
 -----------
-- symbols could be flyweights, perhaps not so great when we do boxed lookups?
 - symbol lookup in env could use binary tree?
 - symbols could be replaced by boxes during lookup? or the lookup could be
   cached?

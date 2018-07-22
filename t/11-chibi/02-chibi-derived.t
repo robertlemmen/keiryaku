@@ -81,6 +81,11 @@
   (do ((x x (cdr x))
        (sum 0 (+ sum (car x))))
       ((null? x) sum)))
+
+(let ()
+  (define x 0)
+  (set! x 5)
+    (+ x 1))
 ===
 greater
 equal
@@ -103,3 +108,4 @@ c
 5
 #(0 1 2 3 4)
 25
+6
