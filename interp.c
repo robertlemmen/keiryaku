@@ -41,10 +41,12 @@ struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
     return ret;
 }
 
-value env_lookup(struct interp_env *env, value symbol) {
+value env_lookup(struct interp_env *env, value symbol, value *lookup_vector) {
     assert(value_is_symbol(symbol));
+    int envs = 0;
     while (env) {
         struct interp_env_entry *ee = env->entries;
+        int entries = 0;
         while (ee) {
             if (!value_is_symbol(ee->name)) {
                 assert(value_is_symbol(ee->name));
@@ -52,19 +54,44 @@ value env_lookup(struct interp_env *env, value symbol) {
             if (   (value_type(ee->name) == TYPE_SHORT_SYMBOL) 
                 && (value_type(symbol) == TYPE_SHORT_SYMBOL)
                 && (ee->name == symbol) ) {
+                if (lookup_vector) {
+                    // XXX it's somewhat ugly that this relies on alloc not
+                    // being required...
+                    *lookup_vector = make_lookup_vector(NULL, envs, entries);
+                }
                 return ee->value;
             }
             if (   (value_type(ee->name) == TYPE_SYMBOL) 
                 && (value_type(symbol) == TYPE_SYMBOL)
                 && (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) ) {
+                if (lookup_vector) {
+                    *lookup_vector = make_lookup_vector(NULL, envs, entries);
+                }
                 return ee->value;
             }
             ee = ee->next;
+            entries++;
         }
         env = env->outer;
+        envs++;
     }
     fprintf(stderr, "Could not find symbol '%s' in environment\n", value_to_symbol(&symbol));
     return VALUE_NIL;
+}
+
+value env_lookup_vector(struct interp_env *env, value vector) {
+    int envs = lookup_vector_envs(vector);
+    int entries = lookup_vector_entries(vector);
+    while (envs) {
+        envs--;
+        env = env->outer;
+    }
+    struct interp_env_entry *ee = env->entries;
+    while (entries) {
+        entries--;
+        ee = ee->next;
+    }
+    return ee->value;
 }
 
 void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
@@ -235,15 +262,15 @@ struct call_frame* call_frame_new(struct allocator *alloc, struct call_frame *ou
     return ret;
 }
 
-value interp_eval_env_int(struct interp *i, struct call_frame *f);
+value interp_eval_env_int(struct interp *i, struct call_frame *f, value lookup_cons);
 
 // XXX can we put a struct in the args rather than a pointer to it?
-value interp_eval_env(struct interp *i, struct call_frame *caller_frame, value expr, struct interp_env *env) {
+value interp_eval_env(struct interp *i, struct call_frame *caller_frame, value expr, struct interp_env *env, value lookup_cons) {
     i->current_frame = call_frame_new(i->alloc, caller_frame, expr, env);
     // XXX may be cheaper to have bogus outer frame than to check all the
     // time...
     // XXX i->current_frame is always == second argument... ??
-    value ret = interp_eval_env_int(i, i->current_frame);
+    value ret = interp_eval_env_int(i, i->current_frame, lookup_cons);
     if (i->current_frame) {
         i->current_frame = i->current_frame->outer;
     }
@@ -251,7 +278,7 @@ value interp_eval_env(struct interp *i, struct call_frame *caller_frame, value e
 }
 
 inline __attribute__((always_inline))
-value interp_eval_env_int(struct interp *i, struct call_frame *f) {
+value interp_eval_env_int(struct interp *i, struct call_frame *f, value lookup_cons) {
     assert(i != NULL);
 
 tailcall_label:
@@ -271,13 +298,24 @@ tailcall_label:
             break;
 
         case TYPE_SHORT_SYMBOL:
-        case TYPE_SYMBOL:
-            return env_lookup(f->env, f->expr);
+        case TYPE_SYMBOL:;
+            value lookup_vector;
+            value ret = env_lookup(f->env, f->expr, &lookup_vector);
+            if (lookup_cons != VALUE_NIL) {
+                set_car(lookup_cons, lookup_vector);
+            }
+            return ret;
             break;
-
+        case TYPE_LOOKUP_VECTOR:
+            return env_lookup_vector(f->env, f->expr);
+            break;
         case TYPE_CONS:;
             int arg_count;
-            value op = f->locals[0] = interp_eval_env(i, f, car(f->expr), f->env); 
+            // XXX only pass in vector thingie if car(f->expr) is some sort of
+            // symbol, otherwise ((atom-to-function ...) replaces the lookup
+            // with the last result
+            value cfe = car(f->expr);
+            value op = f->locals[0] = interp_eval_env(i, f, cfe, f->env, value_is_symbol(cfe) ? f->expr : VALUE_NIL); 
             if (op == VALUE_NIL) {
                 // XXX is this right? what if the cdr is set?
                 return VALUE_EMPTY_LIST;
@@ -294,7 +332,7 @@ tailcall_label:
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (value_is_true(interp_eval_env(i, f, pos_args[0], f->env))) {
+                        if (value_is_true(interp_eval_env(i, f, pos_args[0], f->env, VALUE_NIL))) {
                             f->expr = pos_args[1];
                             goto tailcall_label;
                         }
@@ -319,7 +357,7 @@ tailcall_label:
                             return VALUE_NIL;
                         }
                         env_bind(i->alloc, f->env, pos_args[0], 
-                            interp_eval_env(i, f, pos_args[1], f->env));
+                            interp_eval_env(i, f, pos_args[1], f->env, VALUE_NIL));
                         // XXX or what does it return?
                         return VALUE_NIL;
                         break;
@@ -357,7 +395,7 @@ tailcall_label:
                                 goto tailcall_label;
                             }
                             else {
-                                cret = interp_eval_env(i, f, car(args), f->env);
+                                cret = interp_eval_env(i, f, car(args), f->env, VALUE_NIL);
                             }
                             args = next_args;
                         }
@@ -408,10 +446,10 @@ tailcall_label:
                             }
                             value arg_value;
                             if (special == VALUE_SP_LET) {
-                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->env);
+                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->env, VALUE_NIL);
                             }
                             else {
-                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->extra_env);
+                                arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->extra_env, VALUE_NIL);
                             }
                             env_bind(i->alloc, f->extra_env, arg_name, arg_value);
                             current_arg = cdr(current_arg);
@@ -426,7 +464,7 @@ tailcall_label:
                         value ca = args;
                         while (value_type(ca) == TYPE_CONS) {
                             // XXX check overflows
-                            f->locals[arg_count] = interp_eval_env(i, f, car(ca), f->env);
+                            f->locals[arg_count] = interp_eval_env(i, f, car(ca), f->env, VALUE_NIL);
                             ca = cdr(ca);
                             arg_count++;
                         }
@@ -475,7 +513,7 @@ tailcall_label:
                                 value_type(pos_args[0]));
                             return VALUE_NIL;
                         }
-                        if (!env_set(i->alloc, f->env, pos_args[0], interp_eval_env(i, f, pos_args[1], f->env))) {
+                        if (!env_set(i->alloc, f->env, pos_args[0], interp_eval_env(i, f, pos_args[1], f->env, VALUE_NIL))) {
                             fprintf(stderr, "Error in application of special 'set!': binding for symbol '%s' not found\n", value_to_symbol(&pos_args[0]));
                         }
                         return VALUE_NIL;
@@ -484,14 +522,14 @@ tailcall_label:
                         arg_count = interp_collect_list(args, 2, pos_args);
                         struct interp_env *eval_env = f->env;
                         if (arg_count == 2) {
-                            eval_env = value_to_environment(interp_eval_env(i, f, pos_args[1], f->env));
+                            eval_env = value_to_environment(interp_eval_env(i, f, pos_args[1], f->env, VALUE_NIL));
                         }
                         else if (arg_count != 1) {
                             fprintf(stderr, "Arity error in application of special 'eval': expected 1 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        f->expr = interp_eval_env(i, f, pos_args[0], f->env);
+                        f->expr = interp_eval_env(i, f, pos_args[0], f->env, VALUE_NIL);
                         f->env = eval_env;
                         goto tailcall_label;
                         break;
@@ -514,7 +552,7 @@ tailcall_label:
                 }
                 // evaluate all arguments
                 for (int j = 0; j < arg_count; j++) {
-                    f->locals[j+1] = interp_eval_env(i, f, pos_args[j], f->env);
+                    f->locals[j+1] = interp_eval_env(i, f, pos_args[j], f->env, VALUE_NIL);
                 }
 apply_eval_label:
                 // XXX this is where we could jump to from the APPLY!
@@ -659,7 +697,7 @@ void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f)
 }
 
 value interp_eval(struct interp *i, value expr) {
-    return interp_eval_env(i, NULL, expr, i->top_env);
+    return interp_eval_env(i, NULL, expr, i->top_env, VALUE_NIL);
 }
 
 void interp_gc(struct interp *i) {

@@ -362,20 +362,6 @@
                 (cons (apply function (_nv-map car lists))
                     (apply map function (_nv-map cdr lists)))))))
 
-(define _repl
-    (lambda (fh)
-        (let ((expr (read fh)))
-            (if (eof-object? expr)
-                '()
-                (let ((result (eval (_compile expr) _top_env)))
-                    (if (_nil? result)
-                        '()
-                        (begin
-                            (display result stdout)
-                            (newline stdout)
-                        ))
-                    (_repl fh)) ))))
-
 ; XXX there must be a nicer way to recurse from a variadic...
 (define _include
     (lambda (v)

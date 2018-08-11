@@ -75,6 +75,20 @@ char* value_to_string(value *s) {
     }
 }
 
+value make_lookup_vector(struct allocator *a, uint16_t envs, uint16_t entries) {
+    return ((uint64_t)envs << 32) | ((uint64_t)entries << 16) | TYPE_LOOKUP_VECTOR;
+}
+
+uint16_t lookup_vector_envs(value l) {
+    assert(value_type(l) == TYPE_LOOKUP_VECTOR);
+    return (l >> 32) & 0xffff;
+}
+
+uint16_t lookup_vector_entries(value l) {
+    assert(value_type(l) == TYPE_LOOKUP_VECTOR);
+    return (l >> 16) & 0xffff;
+}
+
 // XXX this needs to move to ports
 void dump_value(value v, FILE *f) {
     switch (value_type(v)) {

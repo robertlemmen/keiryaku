@@ -22,6 +22,7 @@
  *   010_ - enumerated
  *   011_ - short symbol
  *   100_ - short string
+ *   101_ - lookup vector
  *
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
@@ -89,6 +90,7 @@ typedef uint64_t value;
 #define TYPE_FLOAT            0b0100
 #define TYPE_SHORT_SYMBOL     0b0110
 #define TYPE_SHORT_STRING     0b1000
+#define TYPE_LOOKUP_VECTOR    0b1010
 
 #define TYPE_SYMBOL           0b0001
 #define TYPE_STRING           0b0011
@@ -172,6 +174,17 @@ value make_string(struct allocator *a, char *s);
  * also means that the caller has to be very careful as the value returned from
  * this does not outlive the value passed in! */
 char* value_to_string(value *s);
+
+/* Lookup Vectors
+ *
+ * Lookup Vectors are a dynamic optimization, instead of looking up symbols
+ * every time they are evaluated, they are only evaluated once and then replaced
+ * with a vector of two numbers: how many environments to move up, and how many
+ * entries into that environment. */
+
+value make_lookup_vector(struct allocator *a, uint16_t envs, uint16_t entries);
+uint16_t lookup_vector_envs(value l);
+uint16_t lookup_vector_entries(value l);
 
 /* Builtins
  * */

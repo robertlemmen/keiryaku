@@ -13,5 +13,5 @@ done
 make clean
 CFLAGS="-O2 -pg -no-pie" make
 echo "running benchmark..."
-./keiryaku < all-tests.ss > /dev/null
-gprof ./keiryaku
+time (./keiryaku < all-tests.ss > /dev/null)
+gprof --no-graph ./keiryaku | head -n 20

@@ -29,6 +29,5 @@ memory management
 
 performance
 -----------
-- symbol lookup in env could use binary tree?
-- symbols could be replaced by boxes during lookup? or the lookup could be
-  cached?
+- vectors could be direct pointers
+- more symbols could be replaced with vectors (?)
