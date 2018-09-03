@@ -63,22 +63,11 @@ struct parser_cb_args {
 // XXX with some of this in here, some configs may not be globals anymore
 static void parser_callback(value expr, void *arg) {
     struct parser_cb_args *pargs = (struct parser_cb_args*)arg;
-
-    if (arg_debug_compiler) {
-        printf("// parsed expression: ");
-        dump_value(expr, stdout);
-        printf("\n");
-    }
     value comp_expr = make_cons(pargs->a, make_symbol(pargs->a, "quote"),
                                           make_cons(pargs->a, expr, VALUE_EMPTY_LIST));
     comp_expr = make_cons(pargs->a, make_symbol(pargs->a, "_compile"), 
                                     make_cons(pargs->a, comp_expr, VALUE_EMPTY_LIST));
     expr = interp_eval(pargs->i, comp_expr);
-    if (arg_debug_compiler) {
-        printf("// compiled expression: ");
-        dump_value(expr, stdout);
-        printf("\n");
-    }
     // execute it!
     interp_eval(pargs->i, expr);
 }
@@ -157,6 +146,10 @@ int main(int argc, char **argv) {
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stderr"),
         port_new(a, stderr, false, true, true, false));
+
+    env_bind(a, interp_top_env(i),
+        make_symbol(a, "_arg-debug-compiler"),
+        arg_debug_compiler ? VALUE_TRUE : VALUE_FALSE);
 
     if (load_compiler) {
         consume_file(p, "compiler.ss");
