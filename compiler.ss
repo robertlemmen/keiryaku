@@ -178,6 +178,7 @@
                     (list 'if cex cex (_emit-and-case (cdr ex) _compile))))
             ex)))
 
+; XXX what are these two for?
 (define sub1
     (lambda (n)
         (- n 1)))
@@ -185,6 +186,10 @@
 (define add1
     (lambda (n)
         (+ n 1)))
+
+(define list
+    (lambda args
+        args))
         
 (define _compile
     (let [
@@ -239,6 +244,19 @@
                     (body (if (pair? (cddr ex)) (caddr ex) '()))]
                     (_compile (list 'letrec* (list (list '_body (list 'lambda var-list (list 'if test retval 
                         (list 'begin body (cons '_body increment)))))) (cons '_body initial-vals))))))
+        (compile-define
+            (lambda (ex _compile)
+                (if (list? (car ex))
+                    (list 'define (caar ex) (_compile (cons 'lambda (cons (cdar ex) (cdr ex)))))
+                    (if (pair? (car ex))
+                        ; XXX this one should probably follow the structure of
+                        ; the first case above, with cons, cdr ex at the end
+                        ; and compile around the whole thing. also needs a test
+                        ; case
+                        (list 'define (caar ex) (list 'lambda (cdar ex) (_compile (cadr ex))))
+                        ; XXX this one probably swallows multiple body
+                        ; statements before running compile on them
+                        (list 'define (car ex) (_compile (cadr ex)))))))
         ]
         (lambda (ex)
             (if (pair? ex)
@@ -262,15 +280,13 @@
                                                     (compile-make-vector (cdr ex) _compile)
                                                     (if (eq? (car ex) 'do)
                                                         (compile-do (cdr ex) _compile)
-                                                        (cons (_compile (car ex)) (_compile (cdr ex)))))))))))))
+                                                        (if (eq? (car ex) 'define)
+                                                            (compile-define (cdr ex) _compile)
+                                                        (cons (_compile (car ex)) (_compile (cdr ex))))))))))))))
                 ex))))
 
 ; some base environment, should probably be separate from compiler, and should
 ; use compiler
-(define list
-    (lambda args
-        args))
-
 (define length
     (lambda (l)
         (if (null? l)

@@ -350,7 +350,7 @@ tailcall_label:
                         }
                         // XXX do we need to eval it first?
                         if (!value_is_symbol(pos_args[0])) {
-                            fprintf(stderr, "Type error in application of special 'define': expected a symbol args but got %li\n",
+                            fprintf(stderr, "Type error in application of special 'define': expected a symbol args but got type %li\n",
                                 // XXX we should have a textual type, just for error
                                 // repoting and logging
                                 value_type(pos_args[0]));
