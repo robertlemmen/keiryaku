@@ -362,6 +362,12 @@ value builtin_mk_end_of_file(struct allocator *alloc) {
     return VALUE_EOF;
 }
 
+value builtin_procedure(struct allocator *alloc, value v) {
+    return ((value_type(v) == TYPE_INTERP_LAMBDA) || (value_type(v) == TYPE_BUILTIN))
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
 value builtin_compile_stub(struct allocator *alloc, value v) {
     // XXX warrants explanation
     return v;
@@ -415,5 +421,6 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "read"), make_builtin1(alloc, &builtin_read));
     env_bind(alloc, env, make_symbol(alloc, "eof-object?"), make_builtin1(alloc, &builtin_end_of_file));
     env_bind(alloc, env, make_symbol(alloc, "eof-object"), make_builtin0(alloc, &builtin_mk_end_of_file));
+    env_bind(alloc, env, make_symbol(alloc, "procedure?"), make_builtin1(alloc, &builtin_procedure));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
 }

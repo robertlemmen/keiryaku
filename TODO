@@ -1,6 +1,6 @@
 language completeness
 ---------------------
-+ procedure? towards srf-1
++ named let, towards srf-1
 + compiler support for port ops with default port
 + assoc should support 3-arity comparator case, see member
 

@@ -72,6 +72,9 @@
         (+ 1 2)
         (+ 2 x)))
 (xt 5)
+(procedure? car)
+(procedure? (lambda (x) (+ x x)))
+(procedure? 'car)
 ===
 9
 720
@@ -101,3 +104,6 @@
 3
 4
 7
+#t
+#t
+#f
