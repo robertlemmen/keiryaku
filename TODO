@@ -1,7 +1,6 @@
 language completeness
 ---------------------
-+ compiler support to create (begin implicit in lambda with multiple
-  body expressions, towards srf-1
++ procedure? towards srf-1
 + compiler support for port ops with default port
 + assoc should support 3-arity comparator case, see member
 

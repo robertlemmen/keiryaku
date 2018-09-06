@@ -257,6 +257,11 @@
                         ; XXX this one probably swallows multiple body
                         ; statements before running compile on them
                         (list 'define (car ex) (_compile (cadr ex)))))))
+        (compile-lambda
+            (lambda (ex _compile)
+                (if (null? (cddr ex))
+                    (cons 'lambda (_compile ex))
+                    (list 'lambda (car ex) (cons 'begin (_compile (cdr ex)))))))
         ]
         (lambda (ex)
             (if (pair? ex)
@@ -282,7 +287,9 @@
                                                         (compile-do (cdr ex) _compile)
                                                         (if (eq? (car ex) 'define)
                                                             (compile-define (cdr ex) _compile)
-                                                        (cons (_compile (car ex)) (_compile (cdr ex))))))))))))))
+                                                            (if (eq? (car ex) 'lambda)
+                                                                (compile-lambda (cdr ex) _compile)
+                                                                (cons (_compile (car ex)) (_compile (cdr ex)))))))))))))))
                 ex))))
 
 ; some base environment, should probably be separate from compiler, and should

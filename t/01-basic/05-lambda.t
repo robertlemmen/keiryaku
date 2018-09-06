@@ -67,6 +67,11 @@
 (apply + '(5 6))
 (apply count '((4 5 6)))
 (apply count '((list 4 5 6)))
+(define xt
+    (lambda (x)
+        (+ 1 2)
+        (+ 2 x)))
+(xt 5)
 ===
 9
 720
@@ -95,4 +100,4 @@
 11
 3
 4
-
+7
