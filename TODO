@@ -1,8 +1,10 @@
 language completeness
 ---------------------
-+ named let, towards srf-1
-+ compiler support for port ops with default port
-+ assoc should support 3-arity comparator case, see member
++ more work towards srf-1
+- new parser/include does not honor EOF anymore or fails to complain about
+  open expressions at end of file
+- compiler support for port ops with default port
+- assoc should support 3-arity comparator case, see member
 
 core features
 -------------
@@ -11,7 +13,7 @@ core features
 
 technicalities
 --------------
-- should (display ...) put quotes around strings?
++ should (display ...) put quotes around strings?
 - implement argument overflow logic in inter.c eval frame
 - turn push-parsing into pulling style, move parser out of types
 - equals? needs implementation for vectors

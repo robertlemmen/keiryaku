@@ -225,8 +225,15 @@
             (lambda (ex _compile)
                 (if (null? (cddr ex))
                     (cons 'let (_compile ex))
-                    ; XXX second case most likely needs a compile as well!
-                    (list 'let (car ex) (cons 'begin (cdr ex))))))
+                    (if (symbol? (car ex))
+                        (list 'let* (list
+                            (list (car ex) ; body name
+                            (list 'lambda
+                                (map car (cadr ex)) ; formals
+                                (caddr ex)))) ; body thunk
+                                (cons (car ex) (map cadr (cadr ex)))) ; call with initials
+                        ; XXX this case most likely needs a compile as well!
+                        (list 'let (car ex) (cons 'begin (cdr ex)))))))
         (compile-arity2-member
             (lambda (ex _compile)
                 (if (null? (cddr ex))
