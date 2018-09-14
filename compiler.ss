@@ -399,3 +399,6 @@
 (define include
     (lambda v
         (_include v)))
+
+(define quotient truncate-quotient)
+(define remainder truncate-remainder)

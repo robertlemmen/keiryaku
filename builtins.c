@@ -373,6 +373,20 @@ value builtin_compile_stub(struct allocator *alloc, value v) {
     return v;
 }
 
+value builtin_quotient(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return make_int(alloc, intval(a) / intval(b));
+}
+
+value builtin_remainder(struct allocator *alloc, value a, value b) {
+    assert(value_type(a) == TYPE_INT);
+    assert(value_type(b) == TYPE_INT);
+
+    return make_int(alloc, intval(a) % intval(b));
+}
+
 void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     // create basic environment
     env_bind(alloc, env, make_symbol(alloc, "+"), make_builtinv(alloc, &builtin_plus));
@@ -423,4 +437,8 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "eof-object"), make_builtin0(alloc, &builtin_mk_end_of_file));
     env_bind(alloc, env, make_symbol(alloc, "procedure?"), make_builtin1(alloc, &builtin_procedure));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
+    // XXX probably should not be a built-in, but enables a good test case for
+    // named let
+    env_bind(alloc, env, make_symbol(alloc, "truncate-quotient"), make_builtin2(alloc, &builtin_quotient));
+    env_bind(alloc, env, make_symbol(alloc, "truncate-remainder"), make_builtin2(alloc, &builtin_remainder));
 }
