@@ -1,0 +1,26 @@
+(include "srfi/srfi-1.ss")
+
+(cons 'a '())
+(cons '(a) '(b c d))
+(cons "a" '(b c))
+(cons 'a 3)
+(cons '(a b) 'c)
+(list 'a (+ 3 4) 'c)
+(list)
+(xcons '(b c) 'a)
+(cons* 1 2 3 4)
+(cons* 1)
+; broken, work on it! (make-list 4 'c)
+;more from https://raw.githubusercontent.com/gypified/chibi-scheme/master/tests/srfi-1-tests.scm
+===
+(0 8 8 -4)
+(a)
+((a) b c d)
+("a" b c)
+(a . 3)
+((a b) . c)
+(a 7 c)
+()
+(a b c)
+(1 2 3 . 4)
+1

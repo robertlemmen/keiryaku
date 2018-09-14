@@ -1,6 +1,7 @@
 language completeness
 ---------------------
-+ more work towards srf-1
++ something weird is going on with the (map ...) in srfi-1, investigate
++ (make-list...), towards srf-1
 - new parser/include does not honor EOF anymore or fails to complain about
   open expressions at end of file
 - compiler support for port ops with default port
