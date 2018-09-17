@@ -1,5 +1,3 @@
-;;; this is modified, see breaking-map below
-
 ;;; SRFI-1 list-processing library 			-*- Scheme -*-
 ;;; Reference implementation
 ;;;
@@ -1000,7 +998,7 @@
 
 
 ;;; We extend MAP to handle arguments of unequal length.
-(define breaking-map map-in-order)
+(define map map-in-order)
 
 
 ;;; filter, remove, partition

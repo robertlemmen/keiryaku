@@ -256,11 +256,8 @@
                 (if (list? (car ex))
                     (list 'define (caar ex) (_compile (cons 'lambda (cons (cdar ex) (cdr ex)))))
                     (if (pair? (car ex))
-                        ; XXX this one should probably follow the structure of
-                        ; the first case above, with cons, cdr ex at the end
-                        ; and compile around the whole thing. also needs a test
-                        ; case
-                        (list 'define (caar ex) (list 'lambda (cdar ex) (_compile (cadr ex))))
+                        ; XXX wtf? why is this the same as the one above?
+                        (list 'define (caar ex) (_compile (cons 'lambda (cons (cdar ex) (cdr ex)))))
                         ; XXX this one probably swallows multiple body
                         ; statements before running compile on them
                         (list 'define (car ex) (_compile (cadr ex)))))))
@@ -384,6 +381,7 @@
             (cons (function (car list))
                 (_nv-map function (cdr list))))))
 
+; XXX there is one in srfi-1...
 (define map 
     (lambda (function list1 . more-lists)
         (let ((lists (cons list1 more-lists)))
