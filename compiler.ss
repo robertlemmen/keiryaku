@@ -304,6 +304,30 @@
             0
             (+ 1 (length (cdr l))))))
 
+(define _reverse-accumulate
+    (lambda (lst acc)
+        (if (null? lst)
+            acc
+            (_reverse-accumulate (cdr lst) (cons (car lst) acc)))))
+
+(define reverse
+    (lambda (lst)
+        (_reverse-accumulate lst '())))
+
+(define _append-two
+    (lambda (list1 list2)
+        (if (null? list1)
+            list2
+            (cons (car list1) (_append-two (cdr list1) list2)))))
+
+(define append
+    (lambda lists
+        (if (null? lists)
+            '()
+            (if (null? (cdr lists))
+                (car lists)
+                (_append-two (car lists) (car (append (cdr lists)))) ))))
+
 (define _list-vec-copy-rec
     (lambda (l v i)
         (if (pair? l)

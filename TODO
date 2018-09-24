@@ -1,7 +1,6 @@
 language completeness
 ---------------------
-+ append and reverse, towards srfi-1
-- more tests for srfi-1
++ more tests for srfi-1
 - new parser/include does not honor EOF anymore or fails to complain about
   open expressions at end of file
 - compiler support for port ops with default port
