@@ -230,7 +230,7 @@
                             (list (car ex) ; body name
                             (list 'lambda
                                 (map car (cadr ex)) ; formals
-                                (caddr ex)))) ; body thunk
+                                (_compile (caddr ex))))) ; body thunk
                                 (cons (car ex) (map cadr (cadr ex)))) ; call with initials
                         ; XXX this case most likely needs a compile as well!
                         (list 'let (car ex) (cons 'begin (cdr ex)))))))
