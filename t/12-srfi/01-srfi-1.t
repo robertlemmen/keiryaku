@@ -32,7 +32,7 @@
 (cdr '((a) b c d))
 (car '(1 . 2))
 (cdr '(1 . 2))
-;(list-ref '(a b c d) 2)
+(list-ref '(a b c d) 2)
 (third '(a b c d e))
 (take '(a b c d e)  2)
 (drop '(a b c d e)  2)
@@ -164,6 +164,7 @@ a
 (b c d)
 1
 2
+c
 c
 (a b)
 (c d e)

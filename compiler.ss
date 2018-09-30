@@ -431,3 +431,9 @@
 
 (define quotient truncate-quotient)
 (define remainder truncate-remainder)
+
+(define list-ref
+    (lambda (lis k)
+        (if (eq? 0 k)
+            (car lis)
+            (list-ref (cdr lis) (- k 1)))))
