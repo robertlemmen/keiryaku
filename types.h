@@ -81,7 +81,7 @@ struct allocator_gc_ctx;
 
 typedef uint64_t value;
 
-#define value_is_immediate(x) (!(((x) & 1)))
+#define value_is_immediate(x) (!((x) & 1))
 #define value_type(x) ((x) & 15)
 #define value_to_cell(x) (void*)((x) & ~15) // XXX should be called block?
 
@@ -147,6 +147,10 @@ value make_cons(struct allocator *a, value car, value cdr);
 
 #define car(x) (((struct cons*)value_to_cell(x))->car)
 #define cdr(x) (((struct cons*)value_to_cell(x))->cdr)
+
+// retunr pointers to, this is required by GC to update for moved items
+#define carptr(x) (&((struct cons*)value_to_cell(x))->car)
+#define cdrptr(x) (&((struct cons*)value_to_cell(x))->cdr)
 
 #define set_car(x, y) (((struct cons*)value_to_cell(x))->car = y)
 #define set_cdr(x, y) (((struct cons*)value_to_cell(x))->cdr = y)

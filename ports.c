@@ -63,7 +63,7 @@ static void parser_callback(value expr, void *arg) {
 }
 
 value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bool binary) {
-    struct port *ps = allocator_alloc(a, sizeof(struct port));
+    struct port *ps = allocator_alloc_nonmoving(a, sizeof(struct port));
     ps->file = file;
     ps->tty = false;
     ps->in = in;
@@ -79,7 +79,7 @@ value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bo
 }
 
 value port_new_tty(struct allocator *a) {
-    struct port *ps = allocator_alloc(a, sizeof(struct port));
+    struct port *ps = allocator_alloc_nonmoving(a, sizeof(struct port));
     ps->file = NULL;
     ps->tty = true;
     ps->in = true;
@@ -218,4 +218,15 @@ value port_read(value p) {
         free(rle);
     }
     return temp;
+}
+
+void traverse_port(struct allocator_gc_ctx *gc, value p) {
+    assert(value_type(p) == TYPE_PORT);
+    struct port *ps = (struct port*)value_to_cell(p);
+    allocator_gc_add_root(gc, &ps->result);
+    struct result_list_entry *rle = ps->result_overflow_oldest;
+    while (rle) {
+        allocator_gc_add_root(gc, &rle->result);
+        rle = rle->younger;
+    }
 }

@@ -35,7 +35,7 @@ struct interp_lambda {
 };
 
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
-    struct interp_env *ret = allocator_alloc(alloc, (sizeof(struct interp_env)));
+    struct interp_env *ret = allocator_alloc_nonmoving(alloc, (sizeof(struct interp_env)));
     ret->outer = outer;
     ret->entries = NULL;
     return ret;
@@ -108,7 +108,7 @@ void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, val
         prev = ee;
         ee = ee->next;
     }
-    struct interp_env_entry *nee = allocator_alloc(alloc, (sizeof(struct interp_env_entry)));
+    struct interp_env_entry *nee = allocator_alloc_nonmoving(alloc, (sizeof(struct interp_env_entry)));
     nee->next = NULL;
     nee->name = symbol;
     nee->value = value;
@@ -287,6 +287,7 @@ tailcall_label:
         interp_gc(i);
     }
 
+    // XXX should really just use f->locals
     switch (value_type(f->expr)) {
         case TYPE_INT:
         case TYPE_FLOAT:
@@ -323,48 +324,47 @@ tailcall_label:
             else if (value_is_special(op)) {
                 value special = op;
                 value args = cdr(f->expr);
-                value pos_args[3];
                 switch (special) {
                     case VALUE_SP_IF:
-                        arg_count = interp_collect_list(args, 3, pos_args);
+                        arg_count = interp_collect_list(args, 3, &f->locals[1]);
                         if (arg_count != 3) {
                             fprintf(stderr, "Arity error in application of special 'if': expected 3 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (value_is_true(interp_eval_env(i, f, pos_args[0], f->env, VALUE_NIL))) {
-                            f->expr = pos_args[1];
+                        if (value_is_true(interp_eval_env(i, f, f->locals[1], f->env, VALUE_NIL))) {
+                            f->expr = f->locals[2];
                             goto tailcall_label;
                         }
                         else {
-                            f->expr = pos_args[2];
+                            f->expr = f->locals[3];
                             goto tailcall_label;
                         }
                         break;
                     case VALUE_SP_DEFINE:
-                        arg_count = interp_collect_list(args, 2, pos_args);
+                        arg_count = interp_collect_list(args, 2, &f->locals[1]);
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'define': expected 2 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
                         // XXX do we need to eval it first?
-                        if (!value_is_symbol(pos_args[0])) {
+                        if (!value_is_symbol(f->locals[1])) {
                             fprintf(stderr, "Type error in application of special 'define': expected a symbol args but got type %li\n",
                                 // XXX we should have a textual type, just for error
                                 // repoting and logging
-                                value_type(pos_args[0]));
+                                value_type(f->locals[1]));
                             return VALUE_NIL;
                         }
-                        env_bind(i->alloc, f->env, pos_args[0], 
-                            interp_eval_env(i, f, pos_args[1], f->env, VALUE_NIL));
+                        env_bind(i->alloc, f->env, f->locals[1], 
+                            interp_eval_env(i, f, f->locals[2], f->env, VALUE_NIL));
                         // XXX or what does it return?
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_LAMBDA:;
-                        struct interp_lambda *lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda));
+                        struct interp_lambda *lambda = allocator_alloc_nonmoving(i->alloc, sizeof(struct interp_lambda));
                         lambda->env = f->env;
-                        arg_count = interp_collect_list(args, 2, pos_args);
+                        arg_count = interp_collect_list(args, 2, &f->locals[1]);
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'lambda': expected 2 args but got %i\n",
                                 arg_count);
@@ -373,67 +373,68 @@ tailcall_label:
                         if (value_type(car(args)) != TYPE_CONS) {
                             lambda->variadic = 1;
                             lambda->arity = 1; 
-                            lambda->arg_names = allocator_alloc(i->alloc, sizeof(value) * lambda->arity);
+                            lambda->arg_names = allocator_alloc_nonmoving(i->alloc, sizeof(value) * lambda->arity);
                             lambda->arg_names[0] = car(args);
                         }
                         else {
                             bool well_formed;
-                            lambda->arity = interp_count_nonlist(pos_args[0], &well_formed);
+                            lambda->arity = interp_count_nonlist(f->locals[1], &well_formed);
                             lambda->variadic = well_formed ? 0 : 1;
-                            lambda->arg_names = allocator_alloc(i->alloc, sizeof(value) * lambda->arity);
-                            interp_collect_nonlist(pos_args[0], lambda->arity, lambda->arg_names);
+                            lambda->arg_names = allocator_alloc_nonmoving(i->alloc, sizeof(value) * lambda->arity);
+                            interp_collect_nonlist(f->locals[1], lambda->arity, lambda->arg_names);
                         }
-                        lambda->body = pos_args[1];
+                        lambda->body = f->locals[2];
                         return make_interp_lambda(lambda);
                         break;
                     case VALUE_SP_BEGIN:;
-                        value cret = VALUE_NIL;
-                        while (value_type(args ) == TYPE_CONS) {
-                            value next_args = cdr(args);
-                            if (next_args == VALUE_EMPTY_LIST) {
-                                f->expr = car(args);
+                        f->locals[1] = VALUE_NIL;
+                        f->locals[2] = args;
+                        while (value_type(args) == TYPE_CONS) {
+                            f->locals[3] = cdr(f->locals[2]);
+                            if (f->locals[3] == VALUE_EMPTY_LIST) {
+                                f->expr = car(f->locals[2]);
                                 goto tailcall_label;
                             }
                             else {
-                                cret = interp_eval_env(i, f, car(args), f->env, VALUE_NIL);
+                                f->locals[1] = interp_eval_env(i, f, car(f->locals[2]), f->env, VALUE_NIL);
                             }
-                            args = next_args;
+                            f->locals[2] = f->locals[3];
                         }
-                        if (args != VALUE_EMPTY_LIST) {
+                        if (f->locals[2] != VALUE_EMPTY_LIST) {
                             fprintf(stderr, "arguments to BEGIN are not well-formed list\n");
                         }
-                        return cret;
+                        return f->locals[1];
                     case VALUE_SP_QUOTE:
-                        arg_count = interp_collect_list(args, 1, pos_args);
+                        arg_count = interp_collect_list(args, 1, &f->locals[1]);
                         if (arg_count != 1) {
                             fprintf(stderr, "Arity error in application of special 'quote': expected 1 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        return pos_args[0];
+                        return f->locals[1];
                         break;
                     case VALUE_SP_LET:
                     case VALUE_SP_LETS:
                     case VALUE_SP_LETREC:
-                        arg_count = interp_collect_list(args, 2, pos_args);
+                        arg_count = interp_collect_list(args, 2, &f->locals[1]);
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'let': expected 2 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
                         f->extra_env = env_new(i->alloc, f->env);
-                        value current_arg = pos_args[0];
+                        f->locals[3] = f->locals[1];
                         if (special == VALUE_SP_LETREC) {
-                            while (value_type(current_arg) == TYPE_CONS) {
-                                value arg_pair = car(current_arg);
+                            while (value_type(f->locals[3]) == TYPE_CONS) {
+                                value arg_pair = car(f->locals[3]);
                                 value arg_name = car(arg_pair);
                                 env_bind(i->alloc, f->extra_env, arg_name, VALUE_NIL);
-                                current_arg = cdr(current_arg);
+                                f->locals[3] = cdr(f->locals[3]);
                             }
-                            current_arg = pos_args[0];
                         }
-                        while (value_type(current_arg) == TYPE_CONS) {
-                            value arg_pair = car(current_arg);
+                        f->locals[3] = VALUE_NIL;
+                        while (value_type(f->locals[1]) == TYPE_CONS) {
+                            value arg_pair = car(f->locals[1]);
                             if (value_type(arg_pair) != TYPE_CONS) {
                                 fprintf(stderr, "arg binding to let is not a pair\n");
                                 return VALUE_NIL;
@@ -452,9 +453,10 @@ tailcall_label:
                                 arg_value = interp_eval_env(i, f, car(cdr(arg_pair)), f->extra_env, VALUE_NIL);
                             }
                             env_bind(i->alloc, f->extra_env, arg_name, arg_value);
-                            current_arg = cdr(current_arg);
+                            f->locals[1] = cdr(f->locals[1]);
                         }
-                        f->expr = pos_args[1];
+// XXX clean up?                       f->locals[1] = VALUE_NIL;
+                        f->expr = f->locals[2];
                         f->env = f->extra_env;
                         f->extra_env = NULL;
                         goto tailcall_label;
@@ -499,37 +501,37 @@ tailcall_label:
                     case VALUE_SP_SET:
                         // XXX perhaps this should not be allowed to redefined
                         // entries in the top_env
-                        arg_count = interp_collect_list(args, 2, pos_args);
+                        arg_count = interp_collect_list(args, 2, &f->locals[1]);
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'set!': expected 2 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
                         // XXX do we need to eval it first?
-                        if (!value_is_symbol(pos_args[0])) {
+                        if (!value_is_symbol(f->locals[1])) {
                             fprintf(stderr, "Type error in application of special 'set!': expected a symbol args but got %li\n",
                                 // XXX we should have a textual type, just for error
                                 // reporting and logging
-                                value_type(pos_args[0]));
+                                value_type(f->locals[1]));
                             return VALUE_NIL;
                         }
-                        if (!env_set(i->alloc, f->env, pos_args[0], interp_eval_env(i, f, pos_args[1], f->env, VALUE_NIL))) {
-                            fprintf(stderr, "Error in application of special 'set!': binding for symbol '%s' not found\n", value_to_symbol(&pos_args[0]));
+                        if (!env_set(i->alloc, f->env, f->locals[1], interp_eval_env(i, f, f->locals[2], f->env, VALUE_NIL))) {
+                            fprintf(stderr, "Error in application of special 'set!': binding for symbol '%s' not found\n", value_to_symbol(&f->locals[1]));
                         }
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_EVAL:
-                        arg_count = interp_collect_list(args, 2, pos_args);
+                        arg_count = interp_collect_list(args, 2, &f->locals[1]);
                         struct interp_env *eval_env = f->env;
                         if (arg_count == 2) {
-                            eval_env = value_to_environment(interp_eval_env(i, f, pos_args[1], f->env, VALUE_NIL));
+                            eval_env = value_to_environment(interp_eval_env(i, f, f->locals[2], f->env, VALUE_NIL));
                         }
                         else if (arg_count != 1) {
                             fprintf(stderr, "Arity error in application of special 'eval': expected 1 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        f->expr = interp_eval_env(i, f, pos_args[0], f->env, VALUE_NIL);
+                        f->expr = interp_eval_env(i, f, f->locals[1], f->env, VALUE_NIL);
                         f->env = eval_env;
                         goto tailcall_label;
                         break;
@@ -539,23 +541,27 @@ tailcall_label:
                 }
             }
             else {
+                // XXX do we need to set this again?
                 // XXX we could have one block for both builtins and lambdas, where
                 // at the very start we would evaluate all arguments. this way we
                 // could goto from the apply special after it has set up the
                 // arguments, avoiding code duplication
-                value pos_args[NUM_LOCALS];
-                arg_count = interp_collect_list(cdr(f->expr), NUM_LOCALS, pos_args);
-                if (arg_count == NUM_LOCALS) {
+                arg_count = interp_collect_list(cdr(f->expr), NUM_LOCALS-1, &f->locals[1]);
+                if (arg_count == NUM_LOCALS-1) {
                     // XXX implement overflow logic
-                    fprintf(stderr, "Currently only %d args are supported\n",  NUM_LOCALS - 1);
+                    fprintf(stderr, "Currently only %d args are supported\n",  NUM_LOCALS - 2);
                     return VALUE_NIL;
                 }
                 // evaluate all arguments
                 for (int j = 0; j < arg_count; j++) {
-                    f->locals[j+1] = interp_eval_env(i, f, pos_args[j], f->env, VALUE_NIL);
+                    f->locals[j+1] = interp_eval_env(i, f, f->locals[j+1], f->env, VALUE_NIL);
                 }
+                // all the interp_eval_env could have cause GC, which would have
+                // wrecked our "op", so we need to reset it from the
+                // f->locals[0] that are safe. perhaps we should just use
+                // f->locals in general
+                op = f->locals[0];
 apply_eval_label:
-                // XXX this is where we could jump to from the APPLY!
                 if (value_type(op) == TYPE_BUILTIN) {
                     if (builtin_arity(op) == BUILTIN_ARITY_VARIADIC) {
                         value arg_list = VALUE_EMPTY_LIST;
@@ -597,7 +603,7 @@ apply_eval_label:
                                 break;
                             case 3:;
                                 t_builtin3 funcptr3 = builtin3_ptr(op);
-                                return funcptr3(i->alloc, f->locals[1], f->locals[2], f->locals[3]);
+                                return funcptr3(i->alloc,  f->locals[1], f->locals[2], f->locals[3]);
                                 break;
                             default:
                                 fprintf(stderr, "Unsupported builtin arity %d\n", builtin_arity(op));
@@ -637,6 +643,7 @@ apply_eval_label:
                         env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], arg_list);
                     }
                     else {
+//                        printf("# exec lambda with arity %d and args ", lambda->arity);
                         if (lambda->arity != arg_count) {
                             fprintf(stderr, "Arity error in application of lambda: expected %i args but got %i\n",
                                 lambda->arity, arg_count);
@@ -644,7 +651,9 @@ apply_eval_label:
                         }
                         for (int idx = 0; idx < arg_count; idx++) {
                             env_bind(i->alloc, f->extra_env, lambda->arg_names[idx], f->locals[idx+1]);
+//                            dump_value(f->locals[idx+1], stdout);
                         }
+//                        printf("\n");
                     }
                     f->expr = lambda->body;
                     f->env = f->extra_env;
@@ -674,8 +683,8 @@ void interp_add_gc_root_env(struct allocator_gc_ctx *gc, struct interp_env *env)
         struct interp_env_entry *ee = env->entries;
         while (ee) {
             allocator_gc_add_nonval_root(gc, ee);
-            allocator_gc_add_root(gc, ee->name);
-            allocator_gc_add_root(gc, ee->value);
+            allocator_gc_add_root(gc, &ee->name);
+            allocator_gc_add_root(gc, &ee->value);
             ee = ee->next;
         }
         env = env->outer;
@@ -684,13 +693,13 @@ void interp_add_gc_root_env(struct allocator_gc_ctx *gc, struct interp_env *env)
 
 void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f) {
     while (f) {
-        allocator_gc_add_root(gc, f->expr);
+        allocator_gc_add_root(gc, &f->expr);
         interp_add_gc_root_env(gc, f->env);
         if (f->extra_env) {
             interp_add_gc_root_env(gc, f->extra_env);
         }
         for (int i = 0; i < NUM_LOCALS; i++) {
-            allocator_gc_add_root(gc, f->locals[i]);
+            allocator_gc_add_root(gc, &f->locals[i]);
         }
         f = f->outer;
     }
@@ -708,10 +717,10 @@ void interp_gc(struct interp *i) {
 }
 
 void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
-    allocator_gc_add_root(gc, l->body);
+    allocator_gc_add_root(gc, &l->body);
     allocator_gc_add_nonval_root(gc, l->arg_names);
     for (int i = 0; i < l->arity; i++) {
-        allocator_gc_add_root(gc, l->arg_names[i]);
+        allocator_gc_add_root(gc, &l->arg_names[i]);
     }
     struct interp_env *ce = l->env;
     while (ce) {
@@ -719,8 +728,8 @@ void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l
         struct interp_env_entry *ee = ce->entries;
         while (ee) {
             allocator_gc_add_nonval_root(gc, ee);
-            allocator_gc_add_root(gc, ee->name);
-            allocator_gc_add_root(gc, ee->value);
+            allocator_gc_add_root(gc, &ee->name);
+            allocator_gc_add_root(gc, &ee->value);
             ee = ee->next;
         }
         ce = ce->outer;

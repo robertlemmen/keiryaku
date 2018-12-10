@@ -26,4 +26,7 @@ void port_close(value p);
 
 value port_read(value p);
 
+void traverse_port(struct allocator_gc_ctx *gc, value v);
+
+
 #endif /* PORTS_H */

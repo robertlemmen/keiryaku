@@ -101,7 +101,6 @@ void dump_value(value v, FILE *f) {
         case TYPE_ENUM:
             switch (v) {
                 case VALUE_NIL:
-                    // XXX
                     break;
                 case VALUE_TRUE:
                     fprintf(f, "#t");
@@ -130,7 +129,7 @@ void dump_value(value v, FILE *f) {
             break;
         case TYPE_CONS:
             fprintf(f, "(");
-            if ((car(v) != VALUE_NIL) || (cdr(v) != VALUE_NIL)) {
+            if (1 || (car(v) != VALUE_NIL) || (cdr(v) != VALUE_NIL)) {
                 dump_value(car(v), f);
                 while (   (cdr(v) != VALUE_EMPTY_LIST) 
                        && (cdr(v) != VALUE_NIL)
@@ -287,7 +286,7 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v) {
     value *body = value_to_cell(v);
     int length = intval(body[0]);
     for (int i = 0; i < length; i++) {
-        allocator_gc_add_root(gc, body[i+1]);
+        allocator_gc_add_root(gc, &body[i+1]);
     }
 }
 
