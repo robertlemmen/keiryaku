@@ -30,7 +30,9 @@ $(TARGET): $(OBJECTS)
 	@$(CC) -MM $(CFLAGS) $(CINCFLAGS) -c $< > $*.d
 
 test: $(TARGET)
-	@echo "Running Tests..."
+	@$(MAKE) --no-print-directory -C check
+	@echo
+	@echo "Running Contract Tests..."
 	@failed_count=0; \
 	for tf in $$(find t -name "*.t" | sort); do \
 		[ -e "$$tf" ] || continue; \
@@ -52,7 +54,6 @@ test: $(TARGET)
 		echo "$$failed_count tests failed!"; \
 		exit 1; \
 	fi; \
-	echo; \
 	echo "all ok!"
 
 clean:
@@ -60,5 +61,6 @@ clean:
 	@rm -f *.o *.d
 	@rm -f version.c
 	@rm -f $(TARGET)
+	@$(MAKE) --no-print-directory -C check clean
 
 -include *.d

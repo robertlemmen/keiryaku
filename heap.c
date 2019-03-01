@@ -26,8 +26,10 @@
 
 #define GC_LIST_SIZE 1022
 
-#define ARENA_TYPE_NURSERY  0
-#define ARENA_TYPE_TENURED  1
+#define ARENA_TYPE_NURSERY          0
+#define ARENA_TYPE_OLD_SURVIVOR     1
+#define ARENA_TYPE_NEW_SURVIVOR     2
+#define ARENA_TYPE_TENURED          3
 
 struct arena_header {
     uint8_t arena_type;
@@ -49,7 +51,7 @@ void hexdump(uint8_t *d, int l) {
 }
 
 void dump_arena_meta(arena a) {
-    printf("Arena at 0x%016lX:\n", (uint64_t)a);
+    printf("Arena at 0x%016p:\n", (uint64_t)a);
     struct arena_header *ah = a;
     printf("scan_cache: %i\n", ah->scan_cache);
     uint8_t *cp = a;
@@ -185,6 +187,7 @@ void free_cell(cell c) {
 
 struct allocator {
     arena first_nursery;
+    arena first_survivor;
     arena first_tenured;
     int pressure;
 };
@@ -192,6 +195,7 @@ struct allocator {
 struct allocator* allocator_new(void) {
     struct allocator *ret = malloc(sizeof(struct allocator));
     ret->first_nursery = alloc_arena(ARENA_TYPE_NURSERY);
+    ret->first_survivor = alloc_arena(ARENA_TYPE_NEW_SURVIVOR);
     ret->first_tenured = alloc_arena(ARENA_TYPE_TENURED);
     ret->pressure = 0;
     return ret;
@@ -200,9 +204,11 @@ struct allocator* allocator_new(void) {
 void allocator_free(struct allocator *a) {
     assert(a != NULL);
     assert(a->first_nursery != NULL);
+    assert(a->first_survivor != NULL);
     assert(a->first_tenured != NULL);
     // XXX free them all!
     free_arena(a->first_nursery);
+    free_arena(a->first_survivor);
     free_arena(a->first_tenured);
     free(a);
 }
@@ -241,7 +247,13 @@ cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
         } while (1);
     }
     else {
-        arena current_arena = a->first_nursery;
+        arena current_arena = NULL;
+        if (type == ARENA_TYPE_NURSERY) {
+             current_arena = a->first_nursery;
+        }
+        else if (type == ARENA_TYPE_NEW_SURVIVOR) {
+             current_arena = a->first_survivor;
+        }
         do {
             cell ret = alloc_block_bump(current_arena, s);
             if (!ret) {
@@ -328,6 +340,17 @@ void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m) {
     // in tenured, this needs fixing
 }
 
+// for an area type that an item is coming from, figure out where to promote it
+// to next
+int next_arena_type(int at) {
+    switch (at) {
+        case ARENA_TYPE_NURSERY:
+            return ARENA_TYPE_NEW_SURVIVOR;
+        case ARENA_TYPE_OLD_SURVIVOR:
+            return ARENA_TYPE_TENURED;
+    }
+}
+
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 //    fprintf(stderr, "# Doing GC!\n");
 
@@ -337,10 +360,24 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     int visited = 0;
     int reclaimed = 0;
 
+    // XXX turn all existing survivor arenas into ARENA_TYPE_OLD_SURVIVOR
+    arena a = gc->a->first_survivor;
+    while (a) {
+        struct arena_header *ah = a;
+        ah->arena_type = ARENA_TYPE_OLD_SURVIVOR;
+        a = ah->next;
+    }
+    
+    // we do not want to mix new survivors with old ones
+    arena old_survivor = gc->a->first_survivor;
+    gc->a->first_survivor = alloc_arena(ARENA_TYPE_NEW_SURVIVOR);
+
+
     // mark phase
     while (gc->list->count) {
         value *cvptr = gc->list->values[--gc->list->count];
         value cv = *cvptr;
+//        printf("tracing item at 0x%016p: 0x%016p\n", cvptr, cv);
         if ((!gc->list->count) && (gc->list->prev)) {
             struct allocator_gc_list *temp = gc->list;
             gc->list = temp->prev;
@@ -361,6 +398,10 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                 if (!meta_get_mark(a, cell_idx)) {
                     meta_set_mark(a, cell_idx);
                     traverse = true;
+//                    printf("  marking in tenured\n");
+                }
+                else {
+//                    printf("  already marked in tenured\n");
                 }
             }
             else {
@@ -376,10 +417,16 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                             break;
                         }
                     }
-                    cell newloc = allocator_alloc_type(gc->a, cc*16, ah->arena_type+1);
+                    // XXX this should just go to the next type of arena, so
+                    // survivor if coming from nursery, but that blows up
+                    // quickly. I wonder whether it is because we could follow
+                    // the link to it twice, and then try to interpret it as a
+                    // forwarding pointer?
+                    cell newloc = allocator_alloc_type(gc->a, cc*16, next_arena_type(ah->arena_type));
                     cell oldloc = value_to_cell(cv);
                     memcpy(newloc, oldloc, cc*16);
-                    //printf("# moving heap item from 0x%016X to 0x%016X\n", oldloc, newloc);
+/*                    printf("  moving heap item from 0x%016p to 0x%016p (arena type %i -> %i)\n", oldloc, 
+                        newloc, ah->arena_type, next_arena_type(ah->arena_type));*/
                     if (arg_debug) {
                         memset(oldloc, 0x19, cc*16); 
                     }
@@ -396,10 +443,16 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                     meta_set_mark(new_a, new_cell_idx);
                 }
                 else {
-                    cell oldloc = value_to_cell(cv);
-                    cell newloc;
-                    memcpy(&newloc, oldloc, sizeof(void*));
-                    *cvptr = (uint64_t)newloc | value_type(cv);
+                    // we may see the same item twice, and then we do not want
+                    // to promote it twice
+                    if (ah->arena_type != ARENA_TYPE_NEW_SURVIVOR) {
+                        cell oldloc = value_to_cell(cv);
+                        cell newloc;
+                        memcpy(&newloc, oldloc, sizeof(void*));
+/*                        printf("  following forwarding pointer 0x%016p to 0x%016p where oldloc is arena_type %i\n", 
+                            oldloc, newloc, ah->arena_type);*/
+                        *cvptr = (uint64_t)newloc | value_type(cv);
+                    }
                 }
             }
             if (traverse) {
@@ -424,7 +477,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         }
     }
     // sweep tenured
-    arena a = gc->a->first_tenured;
+    a = gc->a->first_tenured;
     while (a) {
         // XXX of course we want to do this with word-sized manipulations, not
         // looping
@@ -473,6 +526,19 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     // correctly!
     }
 
+    // also unmark the survivor pages
+    a = gc->a->first_survivor;
+    while (a) {
+        // XXX this is even easier to clear because we never allocate to this again
+        for (int i = 1024; i < 65535; i++) {
+            if (meta_get_block(a, i) && meta_get_mark(a, i)) {
+                meta_clear_mark(a, i);
+            }
+        }
+        struct arena_header *ah = a;
+        a = ah->next;
+    }
+
     // XXX some sort of free list
     while (gc->a->first_nursery) {
         arena temp = ((struct arena_header*)gc->a->first_nursery)->next;
@@ -480,6 +546,12 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         gc->a->first_nursery = temp;
     }
     gc->a->first_nursery = alloc_arena(ARENA_TYPE_NURSERY);
+
+    while (old_survivor) {
+        arena temp = ((struct arena_header*)old_survivor)->next;
+        free_arena(old_survivor);
+        old_survivor = temp;
+    }
 //    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
 //    fflush(stdout);
 
