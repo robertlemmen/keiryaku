@@ -1,10 +1,11 @@
 language: c
-install: make
+install: make 
 script: make test
 
 # hacks to get submodules to work on travis
 git:
   submodules: false
 before_install:
+  - sudo apt-get install -y check
   - sed -i 's/git@github.com:/https:\/\/github.com\//' .gitmodules
   - git submodule update --init --recursive
