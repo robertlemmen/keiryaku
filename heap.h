@@ -85,12 +85,16 @@ bool allocator_needs_gc(struct allocator *a);
 
 struct allocator_gc_ctx;
 
-struct allocator_gc_ctx* allocator_gc_new(struct allocator *a);
 // XXX ugly! why do we have a cycle between this and types.h? eprhaps gc needs
 // to be in own file?
+
+struct allocator_gc_ctx* allocator_gc_new(struct allocator *a);
 // this needs a pointer to a value as it needs to update the source if the item
-// did get moved
+// did get moved. also note that you need to ensure that the passed value is a
+// non-immediate. you can use the _fp macro below for this
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, uint64_t *v);
+// fast-path macro that avoids calling _add_root() for non-immediates
+#define allocator_gc_add_root_fp(gc, v) if (!value_is_immediate(*v)) { allocator_gc_add_root(gc, v); }
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m);
 void allocator_gc_perform(struct allocator_gc_ctx *gc);
 

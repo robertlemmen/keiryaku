@@ -683,8 +683,8 @@ void interp_add_gc_root_env(struct allocator_gc_ctx *gc, struct interp_env *env)
         struct interp_env_entry *ee = env->entries;
         while (ee) {
             allocator_gc_add_nonval_root(gc, ee);
-            allocator_gc_add_root(gc, &ee->name);
-            allocator_gc_add_root(gc, &ee->value);
+            allocator_gc_add_root_fp(gc, &ee->name);
+            allocator_gc_add_root_fp(gc, &ee->value);
             ee = ee->next;
         }
         env = env->outer;
@@ -693,13 +693,13 @@ void interp_add_gc_root_env(struct allocator_gc_ctx *gc, struct interp_env *env)
 
 void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f) {
     while (f) {
-        allocator_gc_add_root(gc, &f->expr);
+        allocator_gc_add_root_fp(gc, &f->expr);
         interp_add_gc_root_env(gc, f->env);
         if (f->extra_env) {
             interp_add_gc_root_env(gc, f->extra_env);
         }
         for (int i = 0; i < NUM_LOCALS; i++) {
-            allocator_gc_add_root(gc, &f->locals[i]);
+            allocator_gc_add_root_fp(gc, &f->locals[i]);
         }
         f = f->outer;
     }
@@ -717,10 +717,10 @@ void interp_gc(struct interp *i) {
 }
 
 void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
-    allocator_gc_add_root(gc, &l->body);
+    allocator_gc_add_root_fp(gc, &l->body);
     allocator_gc_add_nonval_root(gc, l->arg_names);
     for (int i = 0; i < l->arity; i++) {
-        allocator_gc_add_root(gc, &l->arg_names[i]);
+        allocator_gc_add_root_fp(gc, &l->arg_names[i]);
     }
     struct interp_env *ce = l->env;
     while (ce) {
@@ -728,8 +728,8 @@ void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l
         struct interp_env_entry *ee = ce->entries;
         while (ee) {
             allocator_gc_add_nonval_root(gc, ee);
-            allocator_gc_add_root(gc, &ee->name);
-            allocator_gc_add_root(gc, &ee->value);
+            allocator_gc_add_root_fp(gc, &ee->name);
+            allocator_gc_add_root_fp(gc, &ee->value);
             ee = ee->next;
         }
         ce = ce->outer;

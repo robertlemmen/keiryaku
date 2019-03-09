@@ -316,10 +316,6 @@ struct allocator_gc_ctx* allocator_gc_new(struct allocator *a) {
 }
 
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, value *v) {
-    // XXX we could do this outside to safe function calls, macro?
-    if (value_is_immediate(*v)) {
-        return;
-    }
     uint_fast16_t cell_idx = cell_index(value_to_cell(*v));
     assert(cell_idx >= 1024);
     if (gc->list->count == GC_LIST_SIZE) {
@@ -458,8 +454,8 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             if (traverse) {
                 switch (value_type(cv)) {
                     case TYPE_CONS:
-                        allocator_gc_add_root(gc, carptr(cv));
-                        allocator_gc_add_root(gc, cdrptr(cv));
+                        allocator_gc_add_root_fp(gc, carptr(cv));
+                        allocator_gc_add_root_fp(gc, cdrptr(cv));
                         break;
                     case TYPE_INTERP_LAMBDA:
                         interp_traverse_lambda(gc, value_to_cell(cv));

@@ -286,7 +286,7 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v) {
     value *body = value_to_cell(v);
     int length = intval(body[0]);
     for (int i = 0; i < length; i++) {
-        allocator_gc_add_root(gc, &body[i+1]);
+        allocator_gc_add_root_fp(gc, &body[i+1]);
     }
 }
 

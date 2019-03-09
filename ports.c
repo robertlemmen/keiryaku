@@ -223,10 +223,10 @@ value port_read(value p) {
 void traverse_port(struct allocator_gc_ctx *gc, value p) {
     assert(value_type(p) == TYPE_PORT);
     struct port *ps = (struct port*)value_to_cell(p);
-    allocator_gc_add_root(gc, &ps->result);
+    allocator_gc_add_root_fp(gc, &ps->result);
     struct result_list_entry *rle = ps->result_overflow_oldest;
     while (rle) {
-        allocator_gc_add_root(gc, &rle->result);
+        allocator_gc_add_root_fp(gc, &rle->result);
         rle = rle->younger;
     }
 }
