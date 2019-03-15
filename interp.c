@@ -8,7 +8,14 @@
 #include "builtins.h"
 #include "heap.h"
 
-// XXX could be more efficient structure rather than linked list
+#define ENV_ENTRY_ARRAY_SIZE    8
+
+// XXX could be more efficient structure rather than linked list, e.g. a list of
+// fixed-size arrays. also check the distribution of #entries over envs, could
+// be mostly very small with a few (like the top env) long-tail outliers. in
+// that case it would make sense to use a capacity buffer and increase in size
+// when it would overrun. that would also allow us to order the entries, so a
+// lookup would be O(log(n)) with a binary chop
 struct interp_env_entry {
     value name;
     value value;
@@ -659,6 +666,15 @@ apply_eval_label:
                     f->env = f->extra_env;
                     f->extra_env = NULL;
                     goto tailcall_label;
+                }
+                else if (value_type(op) == TYPE_OTHER && value_subtype(op) == SUBTYPE_PARAM) {
+                    struct param *p = value_to_parameter(op);
+                    // XXX this is of course not the actual implementation, we
+                    // need to walk up the dynamic chain (that does not exist
+                    // yet), and find the matching binding, and then return the
+                    // value from there, only falling back to p->init if none is
+                    // found
+                    return p->init;
                 }
                 else {
                     fprintf(stderr, "No idea how to apply operator of type 0x%lX\n", value_type(op));

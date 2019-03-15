@@ -51,7 +51,7 @@ void hexdump(uint8_t *d, int l) {
 }
 
 void dump_arena_meta(arena a) {
-    printf("Arena at 0x%016p:\n", (uint64_t)a);
+    printf("Arena at 0x%16p:\n", a);
     struct arena_header *ah = a;
     printf("scan_cache: %i\n", ah->scan_cache);
     uint8_t *cp = a;
@@ -344,6 +344,9 @@ int next_arena_type(int at) {
             return ARENA_TYPE_NEW_SURVIVOR;
         case ARENA_TYPE_OLD_SURVIVOR:
             return ARENA_TYPE_TENURED;
+        default:
+            // XXX fail somehow, assert?
+            ;
     }
 }
 
@@ -466,6 +469,17 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                     case TYPE_PORT:
                         traverse_port(gc, cv);
                         break;
+                    case TYPE_OTHER:
+                        switch (value_subtype(cv)) {
+                            case SUBTYPE_ENV:;
+                            // this could be traversed, but the environment in
+                            // question is always traversed from somewhere else
+                            // XXX really?
+                            case SUBTYPE_PARAM:
+                            // XXX needs traversing
+                            default:;
+                            // not traversable
+                        }
                     default:;
                         // not traversable
                 }

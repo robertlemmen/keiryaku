@@ -290,11 +290,41 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v) {
     }
 }
 
+struct env_box {
+    uint8_t sub_type;
+    struct interp_env *env;
+};
+
 value make_environment(struct allocator *a, struct interp_env *env) {
-    return (uint64_t)env | TYPE_ENV;
+    struct env_box *ret = allocator_alloc(a, sizeof(struct env_box));
+    ret->sub_type = SUBTYPE_ENV;
+    ret->env = env;
+    return (uint64_t)ret | TYPE_OTHER;
 }
 
 struct interp_env* value_to_environment(value v) {
-    assert(value_type(v) == TYPE_ENV);
-    return (struct interp_env*)value_to_cell(v);
+    assert(value_type(v) == TYPE_OTHER);
+    struct env_box *box = (struct env_box*)value_to_cell(v);
+    assert(box->sub_type == SUBTYPE_ENV);
+    return box->env;
+}
+
+struct param_box {
+    uint8_t sub_type;
+    struct param param;
+};
+
+value make_parameter(struct allocator *a, value init, value convert) {
+    struct param_box *ret = allocator_alloc(a, sizeof(struct param_box));
+    ret->sub_type = SUBTYPE_PARAM;
+    ret->param.init = init;
+    ret->param.convert = convert;
+    return (uint64_t)ret | TYPE_OTHER;
+}
+
+struct param* value_to_parameter(value v) {
+    assert(value_type(v) == TYPE_OTHER);
+    struct param_box *box = (struct param_box*)value_to_cell(v);
+    assert(box->sub_type == SUBTYPE_PARAM);
+    return &box->param;
 }

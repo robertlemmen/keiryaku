@@ -58,10 +58,12 @@
  *   100_ - interpreter lambda
  *   101_ - vector
  *   110_ - port
- *   111_ - environment
+ *   111_ - other
  *
- *   XXX will need a "other" non-immediate where the actual type is only stored
- *   on the heap, sadly
+ * in the case of "other" non-immediates, the sub-type is stored on the heap as
+ * well, in the first 8 bits. currently supported:
+ *   00 - environment
+ *   01 - parameter
  *
  * XXX will need boxes? they could be two-bit tagged immediates...
  *  */
@@ -82,8 +84,9 @@ struct allocator_gc_ctx;
 typedef uint64_t value;
 
 #define value_is_immediate(x) (!((x) & 1))
-#define value_type(x) ((x) & 15)
 #define value_to_cell(x) (void*)((x) & ~15) // XXX should be called block?
+#define value_type(x) ((x) & 15) // XXX we need a subtype call too
+#define value_subtype(x) (*(uint8_t*)(value_to_cell(x)))
 
 #define TYPE_ENUM             0b0000
 #define TYPE_INT              0b0010
@@ -99,7 +102,10 @@ typedef uint64_t value;
 #define TYPE_INTERP_LAMBDA    0b1001
 #define TYPE_VECTOR           0b1011
 #define TYPE_PORT             0b1101
-#define TYPE_ENV              0b1111
+#define TYPE_OTHER            0b1111
+
+#define SUBTYPE_ENV             0b00
+#define SUBTYPE_PARAM           0b01
 
 // XXX we should not need a nil, but then we need to make sure there are no CONS
 // that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
@@ -244,5 +250,15 @@ void dump_value(value v, FILE *f);
 struct interp_env;
 value make_environment(struct allocator *a, struct interp_env *env);
 struct interp_env* value_to_environment(value v);
+
+/* Dynamic Bindings
+ * */
+struct param {
+    value init;
+    value convert;
+};
+
+value make_parameter(struct allocator *a, value init, value convert);
+struct param* value_to_parameter(value v);
 
 #endif /* TYPES_H */

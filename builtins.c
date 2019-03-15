@@ -369,7 +369,9 @@ value builtin_mk_end_of_file(struct allocator *alloc) {
 }
 
 value builtin_procedure(struct allocator *alloc, value v) {
-    return ((value_type(v) == TYPE_INTERP_LAMBDA) || (value_type(v) == TYPE_BUILTIN))
+    return ( (value_type(v) == TYPE_INTERP_LAMBDA)
+             || (value_type(v) == TYPE_BUILTIN)
+             || (value_type(v) == TYPE_OTHER && value_subtype(v) == SUBTYPE_PARAM) )
         ? VALUE_TRUE
         : VALUE_FALSE;
 }
@@ -377,6 +379,11 @@ value builtin_procedure(struct allocator *alloc, value v) {
 value builtin_compile_stub(struct allocator *alloc, value v) {
     // XXX warrants explanation
     return v;
+}
+
+value builtin_make_parameter(struct allocator *alloc, value i, value c) {
+    // XXX perhaps check that c is a procedure
+    return make_parameter(alloc, i, c);
 }
 
 value builtin_quotient(struct allocator *alloc, value a, value b) {
@@ -443,6 +450,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "eof-object?"), make_builtin1(alloc, &builtin_end_of_file));
     env_bind(alloc, env, make_symbol(alloc, "eof-object"), make_builtin0(alloc, &builtin_mk_end_of_file));
     env_bind(alloc, env, make_symbol(alloc, "procedure?"), make_builtin1(alloc, &builtin_procedure));
+    env_bind(alloc, env, make_symbol(alloc, "make-parameter"), make_builtin2(alloc, &builtin_make_parameter));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
     // XXX probably should not be a built-in, but enables a good test case for
     // named let
