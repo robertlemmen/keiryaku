@@ -40,9 +40,12 @@
  *   00111____ - 'Begin' Special
  *   01001____ - 'Quote' Special
  *   01011____ - 'Let' Special
- *   01101____ - 'Apply' Special
- *   01111____ - 'Set' Special
- *   10001____ - 'Eval' Special
+ *   01101____ - 'Let*' Special
+ *   01111____ - 'Letrec' Special
+ *   10001____ - 'Apply' Special
+ *   10011____ - 'Set' Special
+ *   10101____ - 'Eval' Special
+ *   10111____ - 'Parameterize'
  *
  * this means that enumerated "special" values can be compared for equality 
  * directly, by comparing the value bitwise.
@@ -126,6 +129,7 @@ typedef uint64_t value;
 #define VALUE_SP_APPLY   0b100010000
 #define VALUE_SP_SET     0b100110000
 #define VALUE_SP_EVAL    0b101010000
+#define VALUE_SP_PARAM   0b101110000
 
 #define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 

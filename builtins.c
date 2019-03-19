@@ -450,7 +450,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "eof-object?"), make_builtin1(alloc, &builtin_end_of_file));
     env_bind(alloc, env, make_symbol(alloc, "eof-object"), make_builtin0(alloc, &builtin_mk_end_of_file));
     env_bind(alloc, env, make_symbol(alloc, "procedure?"), make_builtin1(alloc, &builtin_procedure));
-    env_bind(alloc, env, make_symbol(alloc, "make-parameter"), make_builtin2(alloc, &builtin_make_parameter));
+    env_bind(alloc, env, make_symbol(alloc, "_make-parameter"), make_builtin2(alloc, &builtin_make_parameter));
     env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
     // XXX probably should not be a built-in, but enables a good test case for
     // named let

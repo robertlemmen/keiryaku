@@ -437,3 +437,8 @@
         (if (eq? 0 k)
             (car lis)
             (list-ref (cdr lis) (- k 1)))))
+
+; XXX actually we need to check the second argument. if it is absent we
+; just call _make-parameter with an unit lambda as the second arg, if it is
+; present we pass it, but also apply it to the init value
+(define make-parameter _make-parameter)
