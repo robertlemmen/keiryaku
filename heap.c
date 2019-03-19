@@ -285,7 +285,7 @@ cell allocator_alloc_nonmoving(struct allocator *a, int s) {
 }
 
 bool allocator_needs_gc(struct allocator *a) {
-    return a->pressure > 10002;
+    return a->pressure > 100000;
 }
 
 // XXX use posix_memalign for this, and assert it has the right size.
