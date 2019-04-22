@@ -68,12 +68,12 @@ typedef void* arena;
 typedef void* cell;
 typedef void* block;
 
-arena alloc_arena(uint8_t type);
-void free_arena(arena a);
+struct allocator;
+
+arena alloc_arena(struct allocator *a, uint8_t type);
+void free_arena(struct allocator *a, arena r);
 block alloc_block(arena a, int s);
 void free_block(block b);
-
-struct allocator;
 
 struct allocator* allocator_new(void);
 void allocator_free(struct allocator *a);

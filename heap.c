@@ -31,6 +31,16 @@
 #define ARENA_TYPE_NEW_SURVIVOR     2
 #define ARENA_TYPE_TENURED          3
 
+#define NUM_START_ARENAS            10
+
+struct allocator {
+    arena first_nursery;
+    arena first_survivor;
+    arena first_tenured;
+    arena arenas_free_list;
+    int pressure;
+};
+
 struct arena_header {
     uint8_t arena_type;
     arena next;
@@ -51,7 +61,7 @@ void hexdump(uint8_t *d, int l) {
 }
 
 void dump_arena_meta(arena a) {
-    printf("Arena at 0x%16p:\n", a);
+    printf("Arena at %p:\n", a);
     struct arena_header *ah = a;
     printf("scan_cache: %i\n", ah->scan_cache);
     uint8_t *cp = a;
@@ -62,9 +72,21 @@ void dump_arena_meta(arena a) {
 }
 
 // XXX with nursery we need some sort of arean freelist
-arena alloc_arena(uint8_t type) {
-    arena ret;
-    posix_memalign(&ret, ARENA_SIZE, ARENA_SIZE);
+arena alloc_arena(struct allocator *a, uint8_t type) {
+    if (!a->arenas_free_list) {
+        void *test = NULL;
+        // XXX make number configurable
+        posix_memalign(&test, ARENA_SIZE, ARENA_SIZE*NUM_START_ARENAS);
+        printf("chunk-allocating new arenas at %p\n", test);
+        a->arenas_free_list = test;
+        for (int i = 0; i < NUM_START_ARENAS-2; i++) {
+            *(void**)test = test + ARENA_SIZE;
+            test = *(void**)test;
+        }
+        *(void**)test = NULL;
+    }
+    arena ret = a->arenas_free_list;
+    a->arenas_free_list = *(void**)ret;
     assert(ret != NULL);
     assert(cell_index(ret) == 0);
 
@@ -76,14 +98,16 @@ arena alloc_arena(uint8_t type) {
     ah->arena_type = type;
     ah->scan_cache = 1024; // first actual cell
 
+    printf("new arena at %p\n", ret);
     return ret;
 }
 
-void free_arena(arena a) {
-    assert(a != NULL);
-    memset(a, 0x25, ARENA_SIZE);
+void free_arena(struct allocator *a, arena r) {
+    assert(r != NULL);
+    memset(r, 0x25, ARENA_SIZE);
     // XXX assert it is empty?
-    free(a);
+    *(void**)r = a->arenas_free_list;
+    a->arenas_free_list = r;
 }
 
 extern int call_count;
@@ -185,18 +209,12 @@ void free_cell(cell c) {
     // XXX are we not doing GC?
 }
 
-struct allocator {
-    arena first_nursery;
-    arena first_survivor;
-    arena first_tenured;
-    int pressure;
-};
-
 struct allocator* allocator_new(void) {
     struct allocator *ret = malloc(sizeof(struct allocator));
-    ret->first_nursery = alloc_arena(ARENA_TYPE_NURSERY);
-    ret->first_survivor = alloc_arena(ARENA_TYPE_NEW_SURVIVOR);
-    ret->first_tenured = alloc_arena(ARENA_TYPE_TENURED);
+    ret->arenas_free_list = NULL;
+    ret->first_nursery = alloc_arena(ret, ARENA_TYPE_NURSERY);
+    ret->first_survivor = alloc_arena(ret, ARENA_TYPE_NEW_SURVIVOR);
+    ret->first_tenured = alloc_arena(ret, ARENA_TYPE_TENURED);
     ret->pressure = 0;
     return ret;
 }
@@ -206,10 +224,11 @@ void allocator_free(struct allocator *a) {
     assert(a->first_nursery != NULL);
     assert(a->first_survivor != NULL);
     assert(a->first_tenured != NULL);
-    // XXX free them all!
-    free_arena(a->first_nursery);
-    free_arena(a->first_survivor);
-    free_arena(a->first_tenured);
+    free_arena(a, a->first_nursery);
+    free_arena(a, a->first_survivor);
+    free_arena(a, a->first_tenured);
+    // XXX clean up arenas free list, which is diffifult because it was
+    // allocated en masse... let's just leave it to the OS for now
     free(a);
 }
 
@@ -226,7 +245,7 @@ cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
                 // that arena is full, try the next one
                 struct arena_header *ah = current_arena;
                 if (!ah->next) {
-                    arena new_arena = alloc_arena(ah->arena_type);
+                    arena new_arena = alloc_arena(a, ah->arena_type);
                     struct arena_header *nah = new_arena;
                     nah->next = a->first_tenured;
                     a->first_tenured = new_arena;
@@ -258,7 +277,7 @@ cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
             cell ret = alloc_block_bump(current_arena, s);
             if (!ret) {
                 struct arena_header *ah = current_arena;
-                arena new_arena = alloc_arena(ah->arena_type);
+                arena new_arena = alloc_arena(a, ah->arena_type);
                 struct arena_header *nah = new_arena;
                 nah->next = a->first_tenured;
                 a->first_nursery = new_arena;
@@ -285,7 +304,7 @@ cell allocator_alloc_nonmoving(struct allocator *a, int s) {
 }
 
 bool allocator_needs_gc(struct allocator *a) {
-    return a->pressure > 100000;
+    return a->pressure > 10000;
 }
 
 // XXX use posix_memalign for this, and assert it has the right size.
@@ -346,12 +365,12 @@ int next_arena_type(int at) {
             return ARENA_TYPE_TENURED;
         default:
             // XXX fail somehow, assert?
-            ;
+            return 0;
     }
 }
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
-//    fprintf(stderr, "# Doing GC!\n");
+    fprintf(stderr, "# Doing GC!\n");
 
     gc->a->pressure = 0;
 
@@ -369,7 +388,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     
     // we do not want to mix new survivors with old ones
     arena old_survivor = gc->a->first_survivor;
-    gc->a->first_survivor = alloc_arena(ARENA_TYPE_NEW_SURVIVOR);
+    gc->a->first_survivor = alloc_arena(gc->a, ARENA_TYPE_NEW_SURVIVOR);
 
 
     // mark phase
@@ -552,14 +571,14 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     // XXX some sort of free list
     while (gc->a->first_nursery) {
         arena temp = ((struct arena_header*)gc->a->first_nursery)->next;
-        free_arena(gc->a->first_nursery);
+        free_arena(gc->a, gc->a->first_nursery);
         gc->a->first_nursery = temp;
     }
-    gc->a->first_nursery = alloc_arena(ARENA_TYPE_NURSERY);
+    gc->a->first_nursery = alloc_arena(gc->a, ARENA_TYPE_NURSERY);
 
     while (old_survivor) {
         arena temp = ((struct arena_header*)old_survivor)->next;
-        free_arena(old_survivor);
+        free_arena(gc->a, old_survivor);
         old_survivor = temp;
     }
 //    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
