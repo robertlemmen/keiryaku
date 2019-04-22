@@ -452,25 +452,26 @@ tailcall_label:
                         }
                         f->locals[3] = VALUE_NIL;
                         while (value_type(f->locals[1]) == TYPE_CONS) {
-                            value arg_pair = car(f->locals[1]);
-                            if (value_type(arg_pair) != TYPE_CONS) {
+                            // XXX all three values in here are subject to GC
+                            // moving stuff away while we still hold a ref to it
+                            f->locals[4] = car(f->locals[1]);
+                            if (value_type(f->locals[4]) != TYPE_CONS) {
                                 fprintf(stderr, "arg binding to let is not a pair\n");
                                 return VALUE_NIL;
                             }
                             // XXX is there not a way this can be evaled?
-                            value arg_name = car(arg_pair);
-                            if (!value_is_symbol(arg_name)) {
+                            f->locals[6] = car(f->locals[4]);
+                            if (!value_is_symbol(f->locals[6])) {
                                 fprintf(stderr, "first part of arg binding to let is not a symbol\n");
                                 return VALUE_NIL;
                             }
-                            value arg_value;
                             if (special == VALUE_SP_LET) {
-                                arg_value = interp_eval_env(i, f, dyn_frame, car(cdr(arg_pair)), f->env, VALUE_NIL);
+                                f->locals[5] = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[4])), f->env, VALUE_NIL);
                             }
                             else {
-                                arg_value = interp_eval_env(i, f, dyn_frame, car(cdr(arg_pair)), f->extra_env, VALUE_NIL);
+                                f->locals[5] = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[4])), f->extra_env, VALUE_NIL);
                             }
-                            env_bind(i->alloc, f->extra_env, arg_name, arg_value);
+                            env_bind(i->alloc, f->extra_env, f->locals[6], f->locals[5]);
                             f->locals[1] = cdr(f->locals[1]);
                         }
 // XXX clean up?                       f->locals[1] = VALUE_NIL;
@@ -481,11 +482,12 @@ tailcall_label:
                         break;
                     case VALUE_SP_APPLY:;
                         arg_count = 0;
-                        value ca = args;
-                        while (value_type(ca) == TYPE_CONS) {
-                            // XXX check overflows
-                            f->locals[arg_count] = interp_eval_env(i, f, dyn_frame, car(ca), f->env, VALUE_NIL);
-                            ca = cdr(ca);
+                        // we use f->locals[NUM_LOCALS-1] as a temporary
+                        f->locals[NUM_LOCALS-1] = args;
+                        while (value_type(f->locals[NUM_LOCALS-1]) == TYPE_CONS) {
+                            // XXX check overflows, take temporary into acocunt
+                            f->locals[arg_count] = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-1]), f->env, VALUE_NIL);
+                            f->locals[NUM_LOCALS-1] = cdr(f->locals[NUM_LOCALS-1]);
                             arg_count++;
                         }
                         if (arg_count < 2) {
@@ -498,12 +500,12 @@ tailcall_label:
                             fprintf(stderr, "Error in application of special 'apply': last argument is not a list\n");
                             return VALUE_NIL;
                         }
-                        ca = f->locals[arg_count-1];
+                        f->locals[NUM_LOCALS-1] = f->locals[arg_count-1];
                         arg_count--;
-                        while (value_type(ca) == TYPE_CONS) {
+                        while (value_type(f->locals[NUM_LOCALS-1]) == TYPE_CONS) {
                             // XXX check overflows
-                            f->locals[arg_count] = car(ca);
-                            ca = cdr(ca);
+                            f->locals[arg_count] = car(f->locals[NUM_LOCALS-1]);
+                            f->locals[NUM_LOCALS-1] = cdr(f->locals[NUM_LOCALS-1]);
                             arg_count++;
                         }
                         // so far we have treated the first arg as an arg, but

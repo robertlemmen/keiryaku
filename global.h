@@ -5,5 +5,6 @@
 
 extern bool arg_debug;
 extern bool arg_debug_compiler;
+extern int arg_gc_threshold;
 
 #endif /* GLOBAL_H */

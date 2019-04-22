@@ -75,9 +75,8 @@ void dump_arena_meta(arena a) {
 arena alloc_arena(struct allocator *a, uint8_t type) {
     if (!a->arenas_free_list) {
         void *test = NULL;
-        // XXX make number configurable
         posix_memalign(&test, ARENA_SIZE, ARENA_SIZE*NUM_START_ARENAS);
-        printf("chunk-allocating new arenas at %p\n", test);
+        //printf("chunk-allocating new arenas at %p\n", test);
         a->arenas_free_list = test;
         for (int i = 0; i < NUM_START_ARENAS-2; i++) {
             *(void**)test = test + ARENA_SIZE;
@@ -98,7 +97,7 @@ arena alloc_arena(struct allocator *a, uint8_t type) {
     ah->arena_type = type;
     ah->scan_cache = 1024; // first actual cell
 
-    printf("new arena at %p\n", ret);
+    //printf("new arena at %p\n", ret);
     return ret;
 }
 
@@ -304,7 +303,7 @@ cell allocator_alloc_nonmoving(struct allocator *a, int s) {
 }
 
 bool allocator_needs_gc(struct allocator *a) {
-    return a->pressure > 10000;
+    return a->pressure > arg_gc_threshold;
 }
 
 // XXX use posix_memalign for this, and assert it has the right size.
@@ -370,7 +369,7 @@ int next_arena_type(int at) {
 }
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
-    fprintf(stderr, "# Doing GC!\n");
+    //fprintf(stderr, "# Doing GC after %i allocations (threshold %i)\n", gc->a->pressure, arg_gc_threshold);
 
     gc->a->pressure = 0;
 

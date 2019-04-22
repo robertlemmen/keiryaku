@@ -22,6 +22,7 @@ static struct option long_options[] = {
     {"debug", no_argument, 0, 'd'},
     {"debug-compiler", no_argument, 0, 'D'},
     {"no-compiler", no_argument, 0, 'N'},
+    {"gc-threshold", required_argument, 0, 'g'},
     {0, 0, 0, 0}
 };
 
@@ -32,7 +33,8 @@ void usage(char *prog_name) {
         "  --version -v         print the program version\n"
         "  --debug -d           switch on code helpful in debug environments\n"
         "  --debug-compiler -D  show input and output of compile stage\n"
-        "  --no-compiler -N     do not load compiler, bare interpreter\n\n",
+        "  --no-compiler -N     do not load compiler, bare interpreter\n"
+        "  --gc-threshold <int> set the threshold for GC pressure to specified number\n\n",
         prog_name);
 }
 
@@ -77,8 +79,12 @@ int main(int argc, char **argv) {
     char *history_file = NULL;
     bool load_compiler = true;
 
+    if (getenv("KEIRYAKU_GC_THRESHOLD")) {
+        arg_gc_threshold = atoi(getenv("KEIRYAKU_GC_THRESHOLD"));
+    }
+
     while (1) {
-        c = getopt_long(argc, argv, "?hvdND", long_options, NULL);
+        c = getopt_long(argc, argv, "?hvdNDg:", long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -96,6 +102,9 @@ int main(int argc, char **argv) {
                 break;
             case 'N':
                 load_compiler = false;
+                break;
+            case 'g':
+                arg_gc_threshold = atoi(optarg);
                 break;
             case 'h':
             case '?':
