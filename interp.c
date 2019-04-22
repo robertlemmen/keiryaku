@@ -282,10 +282,8 @@ value interp_eval_env_int(struct interp *i, struct call_frame *f, struct dynamic
 // XXX can we put a struct in the args rather than a pointer to it?
 value interp_eval_env(struct interp *i, struct call_frame *caller_frame, struct dynamic_frame *dyn_frame, value expr, struct interp_env *env, value lookup_cons) {
     i->current_frame = call_frame_new(i->alloc, caller_frame, expr, env);
-    i->current_dynamic_frame = dyn_frame;
     // XXX may be cheaper to have bogus outer frame than to check all the
     // time...
-    // XXX i->current_frame is always == second argument... ??
     // XXX same problem with dynamic chain
     value ret = interp_eval_env_int(i, i->current_frame, dyn_frame, lookup_cons);
     if (i->current_frame) {
@@ -294,6 +292,7 @@ value interp_eval_env(struct interp *i, struct call_frame *caller_frame, struct 
     return ret;
 }
 
+// XXX what if lookup_cons is poiting to something that gets moved away by GC?
 inline __attribute__((always_inline))
 value interp_eval_env_int(struct interp *i, struct call_frame *f, struct dynamic_frame *dyn_frame, value lookup_cons) {
     assert(i != NULL);
@@ -563,13 +562,16 @@ tailcall_label:
                             return VALUE_NIL;
                         }
                         struct dynamic_frame *orig_dynamic_chain = i->current_dynamic_frame;
-                        value current_binding_iter = f->locals[1];
+                        // this is an iterator over f->locals[1]
+                        // XXX can this conflict with another use of the same
+                        // local?
+                        f->locals[NUM_LOCALS-1] = f->locals[1];
                         struct dynamic_frame *new_dyn_frame = NULL;
                         // XXX hmm, we should really check that it is either
                         // CONS or EMPTY, needs to be well-formed
-                        while (value_type(current_binding_iter) == TYPE_CONS) {
-                            value current_binding_pair = car(current_binding_iter);
-                            new_dyn_frame = allocator_alloc(i->alloc, sizeof(struct dynamic_frame));
+                        while (value_type(f->locals[NUM_LOCALS-1]) == TYPE_CONS) {
+                            f->locals[NUM_LOCALS-2] = car(f->locals[NUM_LOCALS-1]);
+                            new_dyn_frame = allocator_alloc_nonmoving(i->alloc, sizeof(struct dynamic_frame));
                             new_dyn_frame->outer = i->current_dynamic_frame;
                             new_dyn_frame->param = VALUE_NIL;
                             new_dyn_frame->val = VALUE_NIL;
@@ -579,24 +581,28 @@ tailcall_label:
                             // visible during the evaluation. a NIL param
                             // ensures that it is ignored
                             // XXX we should use spare locals for this!
-                            new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, car(cdr(current_binding_pair)), f->env, VALUE_NIL);
-                            new_dyn_frame->param = interp_eval_env(i, f, dyn_frame, car(current_binding_pair), f->env, VALUE_NIL);
+                            new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[NUM_LOCALS-2])), f->env, VALUE_NIL);
+                            new_dyn_frame->param = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-2]), f->env, VALUE_NIL);
                             if (       (value_type(new_dyn_frame->param) != TYPE_OTHER)
                                     || (value_subtype(new_dyn_frame->param) != SUBTYPE_PARAM) ) {
-                                fprintf(stderr, "Binding to parameterize is nt for parameter\n");
+                                fprintf(stderr, "Binding to parameterize is not for parameter\n");
                                 return VALUE_NIL;
                             }
                             struct param *param_def = value_to_parameter(new_dyn_frame->param);
                             // evaluate the converter
                             value convert_expr = make_cons(i->alloc, param_def->convert,
                                                                     make_cons(i->alloc, new_dyn_frame->val, VALUE_EMPTY_LIST));
+                            // XXX I guess during this call new_dyn_frame could
+                            // be collected because i->current_dynamic_frame
+                            // gets reset by the call
                             new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, convert_expr, f->env, VALUE_NIL);
-                            current_binding_iter = cdr(current_binding_iter);
+                            f->locals[NUM_LOCALS-1] = cdr(f->locals[NUM_LOCALS-1]);
                         }
                         // XXX new_dyn_frame should not be NULL, that woul mean
                         // no bindings done
+                        value ret = interp_eval_env(i, f, new_dyn_frame, f->locals[2], f->env, VALUE_NIL);
                         i->current_dynamic_frame = orig_dynamic_chain;
-                        return interp_eval_env(i, f, new_dyn_frame, f->locals[2], f->env, VALUE_NIL);
+                        return ret;
                     default:
                         fprintf(stderr, "Unknown special 0x%lX\n", special);
                         return VALUE_NIL;
@@ -705,17 +711,15 @@ apply_eval_label:
                         env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], arg_list);
                     }
                     else {
-//                        printf("# exec lambda with arity %d and args ", lambda->arity);
                         if (lambda->arity != arg_count) {
                             fprintf(stderr, "Arity error in application of lambda: expected %i args but got %i\n",
                                 lambda->arity, arg_count);
+                            printf("  exec lambda %p %p\n", op, lambda->arity);
                             return VALUE_NIL;
                         }
                         for (int idx = 0; idx < arg_count; idx++) {
                             env_bind(i->alloc, f->extra_env, lambda->arg_names[idx], f->locals[idx+1]);
-//                            dump_value(f->locals[idx+1], stdout);
                         }
-//                        printf("\n");
                     }
                     f->expr = lambda->body;
                     f->env = f->extra_env;

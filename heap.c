@@ -493,8 +493,12 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                             // this could be traversed, but the environment in
                             // question is always traversed from somewhere else
                             // XXX really?
-                            case SUBTYPE_PARAM:
-                            // XXX needs traversing
+                            break;
+                            case SUBTYPE_PARAM:;
+                                struct param *cp = value_to_parameter(cv);
+                                allocator_gc_add_root_fp(gc, &(cp->init)); 
+                                allocator_gc_add_root_fp(gc, &(cp->convert)); 
+                                break;
                             default:;
                             // not traversable
                         }
