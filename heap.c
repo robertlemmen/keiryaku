@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
 
 #include "types.h"
 #include "interp.h"
@@ -368,8 +369,15 @@ int next_arena_type(int at) {
     }
 }
 
+long currentmicros() {
+    struct timespec tp;
+    clock_gettime(CLOCK_MONOTONIC, &tp);
+    return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
+}
+
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     //fprintf(stderr, "# Doing GC after %i allocations (threshold %i)\n", gc->a->pressure, arg_gc_threshold);
+    long mark_start = currentmicros();
 
     gc->a->pressure = 0;
 
@@ -508,6 +516,8 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             }
         }
     }
+    long mark_end = currentmicros();
+
     // sweep tenured
     a = gc->a->first_tenured;
     while (a) {
@@ -586,6 +596,9 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     }
 //    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
 //    fflush(stdout);
+    long sweep_end = currentmicros();
+
+    //printf("GC done with mark phase of %lius and sweep of %lius\n", mark_end - mark_start, sweep_end - mark_end);
 
     free(gc->list);
     free(gc);

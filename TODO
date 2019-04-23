@@ -25,12 +25,11 @@ technicalities
 
 memory management
 -----------------
-+ (parameterize ...) exposes a new GC bug, reduce pressure threshold by 10 and
-  run tests to reproduce
+- adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
+- do not trace into tenured on young GC, needs write barriers
 - properly scan heap for free block when request > 1 cell
 - clean up empty arenas at end, to find stuff that we failed to collect
 - destructor-on-gc e.g. for ports?
-- better gc with nursery, bump allocator and forwarding pointers
 
 performance
 -----------

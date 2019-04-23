@@ -714,7 +714,6 @@ apply_eval_label:
                         if (lambda->arity != arg_count) {
                             fprintf(stderr, "Arity error in application of lambda: expected %i args but got %i\n",
                                 lambda->arity, arg_count);
-                            printf("  exec lambda %p %p\n", op, lambda->arity);
                             return VALUE_NIL;
                         }
                         for (int idx = 0; idx < arg_count; idx++) {
