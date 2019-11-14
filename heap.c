@@ -1,6 +1,5 @@
 #include "heap.h"
 
-#include <malloc.h>
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
