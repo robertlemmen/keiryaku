@@ -6,7 +6,6 @@ language completeness
 
 core features
 -------------
-- non-repl script mode and shebang support
 - raise and friends
 - call/cc, also unlocks (values ...) and friends
 
@@ -14,8 +13,6 @@ technicalities
 --------------
 - write with linenoise should perhaps add to linenoise so that typing after
   output does not erase the output
-- chibi does not display results when in script mode, we should do the same. but
-  we seem to depend on isatty, which is different?
 - implement argument overflow logic in interp.c eval frame
 - turn push-parsing into pulling style, move parser out of types
 - equals? needs implementation for vectors

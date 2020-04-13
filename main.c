@@ -27,7 +27,7 @@ static struct option long_options[] = {
 };
 
 void usage(char *prog_name) {
-    fprintf(stderr, "Usage: %s [options]\n"
+    fprintf(stderr, "Usage: %s [options] [--] [script [arguments]]\n"
         "Options:\n"
         "  --help -h -?         print this text\n"
         "  --version -v         print the program version\n"
@@ -78,6 +78,7 @@ int main(int argc, char **argv) {
     int c;
     char *history_file = NULL;
     bool load_compiler = true;
+    char *script_file = NULL;
 
     if (getenv("KEIRYAKU_GC_THRESHOLD")) {
         arg_gc_threshold = atoi(getenv("KEIRYAKU_GC_THRESHOLD"));
@@ -122,14 +123,12 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    if (optind < argc) {
-        fprintf(stderr, "useless argument \"%s\"\n", argv[optind]);
-        usage(argv[0]);
-        return 1;
-    }
-
-    if (isatty(fileno(stdin))) {
-        printf("-=[ keiryaku %s ]=-\n\n", software_version());
+    for (; optind < argc; optind++) {
+        // XXX currenty we only grab the first extra argument, need to work out
+        // how to pass more aguments to a scheme script
+        if (!script_file) {
+            script_file = argv[optind];
+        }
     }
 
     struct allocator *a = allocator_new();
@@ -139,32 +138,49 @@ int main(int argc, char **argv) {
     pargs.a = a;
     struct parser *p = parser_new(a, &parser_callback, &pargs);
 
-    if (isatty(fileno(stdin))) {
-        env_bind(a, interp_top_env(i), 
-            make_symbol(a, "stdin"),
-            port_new_tty(a));
-    }
-    else {
-        env_bind(a, interp_top_env(i), 
-            make_symbol(a, "stdin"),
-            port_new(a, stdin, true, false, true, false));
-    }
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stdout"),
         port_new(a, stdout, false, true, true, false));
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stderr"),
         port_new(a, stderr, false, true, true, false));
-
     env_bind(a, interp_top_env(i),
         make_symbol(a, "_arg-debug-compiler"),
         arg_debug_compiler ? VALUE_TRUE : VALUE_FALSE);
 
-    if (load_compiler) {
-        consume_file(p, "compiler.ss");
-    }
+    if (script_file) {
+        // script mode, load the file directly
+        env_bind(a, interp_top_env(i), 
+            make_symbol(a, "stdin"),
+            port_new(a, stdin, true, false, true, false));
 
-    consume_file(p, "repl.ss");
+        if (load_compiler) {
+            consume_file(p, "compiler.ss");
+        }
+        consume_file(p, script_file);
+    }
+    else {
+        // repl or stdin mode
+        if (isatty(fileno(stdin))) {
+            printf("-=[ keiryaku %s ]=-\n\n", software_version());
+        }
+
+        if (isatty(fileno(stdin))) {
+            env_bind(a, interp_top_env(i), 
+                make_symbol(a, "stdin"),
+                port_new_tty(a));
+        }
+        else {
+            env_bind(a, interp_top_env(i), 
+                make_symbol(a, "stdin"),
+                port_new(a, stdin, true, false, true, false));
+        }
+
+        if (load_compiler) {
+            consume_file(p, "compiler.ss");
+        }
+        consume_file(p, "repl.ss");
+    }
 
     if (arg_debug) {
         interp_gc(i);
