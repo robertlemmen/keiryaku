@@ -181,8 +181,7 @@ struct builtin_ref {
         t_builtin3 funcptr3;
     };
     int arity;
-    // XXX this could easily have a redundant name/symbol stored, so the error
-    // messages can be better
+    char *name;
 };
 
 int builtin_arity(value v) {
@@ -190,10 +189,16 @@ int builtin_arity(value v) {
     return p->arity;
 }
 
-value make_builtin0(struct allocator *a, t_builtin0 funcptr) {
+char* builtin_name(value v) {
+    struct builtin_ref *p = (struct builtin_ref*)value_to_cell(v);
+    return p->name;
+}
+
+value make_builtin0(struct allocator *a, t_builtin0 funcptr, char *name) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr0 = funcptr;
     p->arity = 0;
+    p->name = name;
     return (uint64_t)p | TYPE_BUILTIN;
 }
 
@@ -204,10 +209,11 @@ t_builtin0 builtin0_ptr(value v) {
     return p->funcptr0;
 }
 
-value make_builtin1(struct allocator *a, t_builtin1 funcptr) {
+value make_builtin1(struct allocator *a, t_builtin1 funcptr, char *name) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr1 = funcptr;
     p->arity = 1;
+    p->name = name;
     return (uint64_t)p | TYPE_BUILTIN;
 }
 
@@ -218,10 +224,11 @@ t_builtin1 builtin1_ptr(value v) {
     return p->funcptr1;
 }
 
-value make_builtin2(struct allocator *a, t_builtin2 funcptr) {
+value make_builtin2(struct allocator *a, t_builtin2 funcptr, char *name) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr2 = funcptr;
     p->arity = 2;
+    p->name = name;
     return (uint64_t)p | TYPE_BUILTIN;
 }
 
@@ -232,10 +239,11 @@ t_builtin2 builtin2_ptr(value v) {
     return p->funcptr2;
 }
 
-value make_builtin3(struct allocator *a, t_builtin3 funcptr) {
+value make_builtin3(struct allocator *a, t_builtin3 funcptr, char *name) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr3 = funcptr;
     p->arity = 3;
+    p->name = name;
     return (uint64_t)p | TYPE_BUILTIN;
 }
 
@@ -246,10 +254,11 @@ t_builtin3 builtin3_ptr(value v) {
     return p->funcptr3;
 }
 
-value make_builtinv(struct allocator *a, t_builtinv funcptr) {
+value make_builtinv(struct allocator *a, t_builtinv funcptr, char *name) {
     struct builtin_ref *p = allocator_alloc(a, sizeof(struct builtin_ref));
     p->funcptr1 = funcptr;
     p->arity = BUILTIN_ARITY_VARIADIC;
+    p->name = name;
     value ret = (uint64_t)p | TYPE_BUILTIN;
     return ret;
 }

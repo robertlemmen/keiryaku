@@ -652,8 +652,8 @@ apply_eval_label:
                     else {
                         int op_arity = builtin_arity(op);
                         if (op_arity != arg_count) {
-                            fprintf(stderr, "Arity error in application of builtin: expected %d args but got %d\n",
-                                op_arity, arg_count);
+                            fprintf(stderr, "Arity error in application of builtin '%s': expected %d args but got %d\n",
+                                builtin_name(op), op_arity, arg_count);
                             return VALUE_NIL;
                         }
                         switch (op_arity) {

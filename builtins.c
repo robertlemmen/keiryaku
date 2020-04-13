@@ -400,60 +400,64 @@ value builtin_remainder(struct allocator *alloc, value a, value b) {
     return make_int(alloc, intval(a) % intval(b));
 }
 
+void bind_builtin_helper(struct allocator *alloc, struct interp_env *env, value builtin) {
+    env_bind(alloc, env, make_symbol(alloc, builtin_name(builtin)), builtin);
+}
+
 void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     // create basic environment
-    env_bind(alloc, env, make_symbol(alloc, "+"), make_builtinv(alloc, &builtin_plus));
-    env_bind(alloc, env, make_symbol(alloc, "-"), make_builtinv(alloc, &builtin_minus));
-    env_bind(alloc, env, make_symbol(alloc, "*"), make_builtinv(alloc, &builtin_mul));
-    env_bind(alloc, env, make_symbol(alloc, "/"), make_builtinv(alloc, &builtin_div));
-    env_bind(alloc, env, make_symbol(alloc, "="), make_builtin2(alloc, &builtin_numeric_equals));
-    env_bind(alloc, env, make_symbol(alloc, "<"), make_builtin2(alloc, &builtin_lt));
-    env_bind(alloc, env, make_symbol(alloc, ">"), make_builtin2(alloc, &builtin_gt));
-    env_bind(alloc, env, make_symbol(alloc, "<="), make_builtin2(alloc, &builtin_le));
-    env_bind(alloc, env, make_symbol(alloc, ">="), make_builtin2(alloc, &builtin_ge));
-    env_bind(alloc, env, make_symbol(alloc, "expt"), make_builtin2(alloc, &builtin_expt));
-    env_bind(alloc, env, make_symbol(alloc, "car"), make_builtin1(alloc, &builtin_car));
-    env_bind(alloc, env, make_symbol(alloc, "cdr"), make_builtin1(alloc, &builtin_cdr));
-    env_bind(alloc, env, make_symbol(alloc, "cons"), make_builtin2(alloc, &make_cons));
-    env_bind(alloc, env, make_symbol(alloc, "pair?"), make_builtin1(alloc, &builtin_pair));
-    env_bind(alloc, env, make_symbol(alloc, "eq?"), make_builtin2(alloc, &builtin_eq));
-    env_bind(alloc, env, make_symbol(alloc, "eqv?"), make_builtin2(alloc, &builtin_eqv));
-    env_bind(alloc, env, make_symbol(alloc, "equal?"), make_builtin2(alloc, &builtin_equal));
-    env_bind(alloc, env, make_symbol(alloc, "null?"), make_builtin1(alloc, &builtin_null));
-    env_bind(alloc, env, make_symbol(alloc, "_nil?"), make_builtin1(alloc, &builtin_nil));
-    env_bind(alloc, env, make_symbol(alloc, "number?"), make_builtin1(alloc, &builtin_number));
-    env_bind(alloc, env, make_symbol(alloc, "integer?"), make_builtin1(alloc, &builtin_integer));
-    env_bind(alloc, env, make_symbol(alloc, "string?"), make_builtin1(alloc, &builtin_string));
-    env_bind(alloc, env, make_symbol(alloc, "symbol?"), make_builtin1(alloc, &builtin_symbol));
-    env_bind(alloc, env, make_symbol(alloc, "string-length"), make_builtin1(alloc, &builtin_string_length));
-    env_bind(alloc, env, make_symbol(alloc, "string=?"), make_builtin2(alloc, &builtin_string_eq));
-    env_bind(alloc, env, make_symbol(alloc, "symbol=?"), make_builtin2(alloc, &builtin_symbol_eq));
-    env_bind(alloc, env, make_symbol(alloc, "make-vector"), make_builtin2(alloc, &builtin_make_vector));
-    env_bind(alloc, env, make_symbol(alloc, "vector?"), make_builtin1(alloc, &builtin_vector));
-    env_bind(alloc, env, make_symbol(alloc, "vector-length"), make_builtin1(alloc, &builtin_vector_length));
-    env_bind(alloc, env, make_symbol(alloc, "vector-ref"), make_builtin2(alloc, &builtin_vector_ref));
-    env_bind(alloc, env, make_symbol(alloc, "vector-set!"), make_builtin3(alloc, &builtin_vector_set));
-    env_bind(alloc, env, make_symbol(alloc, "boolean?"), make_builtin1(alloc, &builtin_boolean));
-    env_bind(alloc, env, make_symbol(alloc, "set-car!"), make_builtin2(alloc, &builtin_set_car));
-    env_bind(alloc, env, make_symbol(alloc, "set-cdr!"), make_builtin2(alloc, &builtin_set_cdr));
-    env_bind(alloc, env, make_symbol(alloc, "list?"), make_builtin1(alloc, &builtin_list));
-    env_bind(alloc, env, make_symbol(alloc, "port?"), make_builtin1(alloc, &builtin_port));
-    env_bind(alloc, env, make_symbol(alloc, "input-port?"), make_builtin1(alloc, &builtin_input_port));
-    env_bind(alloc, env, make_symbol(alloc, "output-port?"), make_builtin1(alloc, &builtin_output_port));
-    env_bind(alloc, env, make_symbol(alloc, "text-port?"), make_builtin1(alloc, &builtin_text_port));
-    env_bind(alloc, env, make_symbol(alloc, "binary-port?"), make_builtin1(alloc, &builtin_binary_port));
-    env_bind(alloc, env, make_symbol(alloc, "write"), make_builtin2(alloc, &builtin_write));
-    env_bind(alloc, env, make_symbol(alloc, "write-string"), make_builtin2(alloc, &builtin_write_string));
-    env_bind(alloc, env, make_symbol(alloc, "open-input-file"), make_builtin1(alloc, &builtin_open_input_file));
-    env_bind(alloc, env, make_symbol(alloc, "close-port"), make_builtin1(alloc, &builtin_close_port));
-    env_bind(alloc, env, make_symbol(alloc, "read"), make_builtin1(alloc, &builtin_read));
-    env_bind(alloc, env, make_symbol(alloc, "eof-object?"), make_builtin1(alloc, &builtin_end_of_file));
-    env_bind(alloc, env, make_symbol(alloc, "eof-object"), make_builtin0(alloc, &builtin_mk_end_of_file));
-    env_bind(alloc, env, make_symbol(alloc, "procedure?"), make_builtin1(alloc, &builtin_procedure));
-    env_bind(alloc, env, make_symbol(alloc, "_make-parameter"), make_builtin2(alloc, &builtin_make_parameter));
-    env_bind(alloc, env, make_symbol(alloc, "_compile"), make_builtin1(alloc, &builtin_compile_stub));
+    bind_builtin_helper(alloc, env, make_builtinv(alloc, &builtin_plus, "+"));
+    bind_builtin_helper(alloc, env, make_builtinv(alloc, &builtin_minus, "-"));
+    bind_builtin_helper(alloc, env, make_builtinv(alloc, &builtin_mul, "*"));
+    bind_builtin_helper(alloc, env, make_builtinv(alloc, &builtin_div, "/"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_numeric_equals, "="));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_lt, "<"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_gt, ">"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_le, "<="));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_ge, ">="));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_expt, "expt"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_car, "car"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_cdr, "cdr"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &make_cons, "cons"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_pair, "pair?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_eq, "eq?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_eqv, "eqv?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_equal, "equal?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_null, "null?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_nil, "_nil?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_number, "number?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_integer, "integer?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_string, "string?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_symbol, "symbol?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_string_length, "string-length"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_string_eq, "string=?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_symbol_eq, "symbol=?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_make_vector, "make-vector"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_vector, "vector?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_vector_length, "vector-length"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_vector_ref, "vector-ref"));
+    bind_builtin_helper(alloc, env, make_builtin3(alloc, &builtin_vector_set, "vector-set!"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_boolean, "boolean?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_set_car, "set-car!"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_set_cdr, "set-cdr!"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_list, "list?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_port, "port?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_input_port, "input-port?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_output_port, "output-port?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_text_port, "text-port?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_binary_port, "binary-port?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_write, "write"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_write_string, "write-string"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_open_input_file, "open-input-file"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_close_port, "close-port"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_read, "read"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_end_of_file, "eof-object?"));
+    bind_builtin_helper(alloc, env, make_builtin0(alloc, &builtin_mk_end_of_file, "eof-object"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_procedure, "procedure?"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_make_parameter, "_make-parameter"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_compile_stub, "_compile"));
     // XXX probably should not be a built-in, but enables a good test case for
     // named let
-    env_bind(alloc, env, make_symbol(alloc, "truncate-quotient"), make_builtin2(alloc, &builtin_quotient));
-    env_bind(alloc, env, make_symbol(alloc, "truncate-remainder"), make_builtin2(alloc, &builtin_remainder));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_quotient, "truncate-quotient"));
+    bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_remainder, "truncate-remainder"));
 }
