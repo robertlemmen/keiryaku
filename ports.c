@@ -187,6 +187,7 @@ value port_read(value p) {
                 free(input);
             }
             else {
+                parser_eof(ps->p);
                 return VALUE_EOF;
             }
         }
@@ -194,6 +195,7 @@ value port_read(value p) {
             char *ret = fgets(&ps->buffer[ps->buf_pos], BUFSIZE - 1 - ps->buf_pos, ps->file);
             if (!ret) {
                 if (feof(ps->file)) {
+                    parser_eof(ps->p);
                     return VALUE_EOF;
                 }
                 else {

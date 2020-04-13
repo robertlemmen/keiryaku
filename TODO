@@ -1,9 +1,6 @@
 language completeness
 ---------------------
 + more tests for srfi-1
-- new parser/include does not honor EOF anymore or fails to complain about
-  open expressions at end of file
-- compiler support for port ops with default port
 - assoc should support 3-arity comparator case, see member
 
 core features
