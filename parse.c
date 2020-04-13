@@ -354,6 +354,13 @@ int parser_tokenize(struct parser *p, char *data) {
                 char *str = malloc(cp - mark);
                 strncpy(str, mark+1, cp - mark - 1);
                 str[cp - mark - 1] = '\0';
+                // XXX a hacky way to support a newline literal, this needs much
+                // more comprehensive escaping support
+                char *loc;
+                while ((loc = strstr(str, "\\n")) != NULL) {
+                    *loc = '\n';
+                    strncpy(loc + 1, loc + 2, cp - mark - 2);
+                }
                 parser_parse(p, P_STRING, 0, str);
                 free(str);
                 mark = NULL;

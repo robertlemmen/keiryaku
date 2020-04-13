@@ -18,9 +18,7 @@ bool port_out(value p);
 bool port_text(value p);
 bool port_binary(value p);
 
-// XXX write-char would mean newline could be a simple lambda
-void port_newline(value p);
-void port_write_(value p, value o);
+void port_write(value p, value o);
 void port_write_string(value p, value o);
 
 value port_open_input_file(struct allocator *a, value filename);
