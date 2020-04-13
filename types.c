@@ -165,6 +165,14 @@ void dump_value(value v, FILE *f) {
     fflush(f);
 }
 
+void dump_string_value(value v, FILE *f) {
+    assert(value_is_string(v));
+    fprintf(f, "%s", value_to_string(&v));
+    // XXX this isn't right, we should really check if this is a tty and then
+    // add to linenoise rather than just print and flush
+    fflush(f);
+}
+
 struct builtin_ref {
     union {
         t_builtin0 funcptr0;
@@ -173,6 +181,8 @@ struct builtin_ref {
         t_builtin3 funcptr3;
     };
     int arity;
+    // XXX this could easily have a redundant name/symbol stored, so the error
+    // messages can be better
 };
 
 int builtin_arity(value v) {

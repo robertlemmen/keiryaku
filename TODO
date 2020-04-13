@@ -1,16 +1,21 @@
 language completeness
 ---------------------
++ (apply + '(1 2 (+ 4 5))) can't be right
++ write on stdin segfaults, should raise/error cleanly
 + more tests for srfi-1
 - assoc should support 3-arity comparator case, see member
 
 core features
 -------------
+- non-repl script mode and shebang support
 - raise and friends
 - call/cc, also unlocks (values ...) and friends
 
 technicalities
 --------------
-+ should (display ...) put quotes around strings? this requires (write-string)
+- write with linenoise should perhaps add to linenoise so that typing after
+  output does not erase the output
+- implement write-char and base newline on that
 - chibi does not display results when in script mode, we should do the same. but
   we seem to depend on isatty, which is different?
 - implement argument overflow logic in interp.c eval frame

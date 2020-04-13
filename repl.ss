@@ -25,7 +25,7 @@
                         (if (_nil? result)
                             '()
                             (begin
-                                (display result stdout)
+                                (write result stdout)
                                 (newline stdout) ))
                     (_repl fh)) )))))
 

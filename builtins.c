@@ -340,8 +340,13 @@ value builtin_newline(struct allocator *alloc, value p) {
     return VALUE_NIL;
 }
 
-value builtin_display(struct allocator *alloc, value o, value p) {
-    port_display(p, o);
+value builtin_write(struct allocator *alloc, value o, value p) {
+    port_write(p, o);
+    return VALUE_NIL;
+}
+
+value builtin_write_string(struct allocator *alloc, value o, value p) {
+    port_write_string(p, o);
     return VALUE_NIL;
 }
 
@@ -443,7 +448,8 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     env_bind(alloc, env, make_symbol(alloc, "text-port?"), make_builtin1(alloc, &builtin_text_port));
     env_bind(alloc, env, make_symbol(alloc, "binary-port?"), make_builtin1(alloc, &builtin_binary_port));
     env_bind(alloc, env, make_symbol(alloc, "newline"), make_builtin1(alloc, &builtin_newline));
-    env_bind(alloc, env, make_symbol(alloc, "display"), make_builtin2(alloc, &builtin_display));
+    env_bind(alloc, env, make_symbol(alloc, "write"), make_builtin2(alloc, &builtin_write));
+    env_bind(alloc, env, make_symbol(alloc, "write-string"), make_builtin2(alloc, &builtin_write_string));
     env_bind(alloc, env, make_symbol(alloc, "open-input-file"), make_builtin1(alloc, &builtin_open_input_file));
     env_bind(alloc, env, make_symbol(alloc, "close-port"), make_builtin1(alloc, &builtin_close_port));
     env_bind(alloc, env, make_symbol(alloc, "read"), make_builtin1(alloc, &builtin_read));

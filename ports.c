@@ -143,10 +143,16 @@ void port_newline(value p) {
     fprintf(ps->file, "\n");
 }
 
-void port_display(value p, value o) {
+void port_write(value p, value o) {
     assert(value_type(p) == TYPE_PORT);
     struct port *ps = (struct port*)value_to_cell(p);
     dump_value(o, ps->file);
+}
+
+void port_write_string(value p, value o) {
+    assert(value_type(p) == TYPE_PORT);
+    struct port *ps = (struct port*)value_to_cell(p);
+    dump_string_value(o, ps->file);
 }
 
 value port_open_input_file(struct allocator *a, value filename) {

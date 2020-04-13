@@ -248,6 +248,7 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v);
  * */
 // XXX whether these should be in here or in ports is questionable...
 void dump_value(value v, FILE *f);
+void dump_string_value(value v, FILE *f);
 
 /* Environment references
  * */
