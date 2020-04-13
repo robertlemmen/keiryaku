@@ -443,3 +443,26 @@
 (define make-parameter
   (lambda (init convert)
     (_make-parameter init convert)))
+
+; XXX these here are standard procedures, need to move once wee can import
+(define (fold-left func initval lst)
+  (if (null? lst)
+    initval
+    (fold-left func (func initval (car lst)) (cdr lst)) ))
+
+(define (filter pred? lst)
+  (if (null? lst)
+    '()
+    (if (pred? (car lst))
+      (cons (car lst) (filter pred? (cdr lst)))
+      (filter pred? (cdr lst))) ))
+
+; XXX taken verbatim from chibi, we also have a version in ./srfi
+(define (iota count . o)
+  (let ((start (if (pair? o) (car o) 0))
+        (step (if (and (pair? o) (pair? (cdr o))) (cadr o) 1)))
+    (let lp ((i count) (res '()))
+      (if (<= i 0)
+          res
+          (lp (- i 1) (cons (+ start (* (- i 1) step)) res))))))
+

@@ -14,7 +14,10 @@ core features
 technicalities
 --------------
 + should (display ...) put quotes around strings?
-- implement argument overflow logic in inter.c eval frame
+- display should support single-argument case
+- chibi does not display results when in script mode, we should do the same. but
+  we seem to depend on isatty, which is different?
+- implement argument overflow logic in interp.c eval frame
 - turn push-parsing into pulling style, move parser out of types
 - equals? needs implementation for vectors
 - equals? should support cyclic structres, also dump_values and list?
