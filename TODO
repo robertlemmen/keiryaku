@@ -13,8 +13,7 @@ core features
 
 technicalities
 --------------
-+ should (display ...) put quotes around strings?
-- display should support single-argument case
++ should (display ...) put quotes around strings? this requires (write-string)
 - chibi does not display results when in script mode, we should do the same. but
   we seem to depend on isatty, which is different?
 - implement argument overflow logic in interp.c eval frame

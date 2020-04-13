@@ -160,6 +160,9 @@ void dump_value(value v, FILE *f) {
             fprintf(f, "<?type %li>", value_type(v));
 //            assert(0 && "unsupported value type");
     }
+    // XXX this isn't right, we should really check if this is a tty and then
+    // add to linenoise rather than just print and flush
+    fflush(f);
 }
 
 struct builtin_ref {
