@@ -140,18 +140,33 @@ bool port_binary(value p) {
 void port_newline(value p) {
     assert(value_type(p) == TYPE_PORT);
     struct port *ps = (struct port*)value_to_cell(p);
+    if (!ps->out) {
+        fprintf(stderr, "Trying to write to non output port\n");
+        // XXX need way to raise error
+        exit(1);
+    }
     fprintf(ps->file, "\n");
 }
 
 void port_write(value p, value o) {
     assert(value_type(p) == TYPE_PORT);
     struct port *ps = (struct port*)value_to_cell(p);
+    if (!ps->out) {
+        fprintf(stderr, "Trying to write to non output port\n");
+        // XXX need way to raise error
+        exit(1);
+    }
     dump_value(o, ps->file);
 }
 
 void port_write_string(value p, value o) {
     assert(value_type(p) == TYPE_PORT);
     struct port *ps = (struct port*)value_to_cell(p);
+    if (!ps->out) {
+        fprintf(stderr, "Trying to write to non output port\n");
+        // XXX need way to raise error
+        exit(1);
+    }
     dump_string_value(o, ps->file);
 }
 

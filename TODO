@@ -1,7 +1,6 @@
 language completeness
 ---------------------
 + (apply + '(1 2 (+ 4 5))) can't be right
-+ write on stdin segfaults, should raise/error cleanly
 + more tests for srfi-1
 - assoc should support 3-arity comparator case, see member
 
