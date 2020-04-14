@@ -61,7 +61,8 @@
  * Once we have traced, and therefore marked or moved all reachable objects, we 
  * can go through the metadata of all tenured arenas and turn all white blocks into 
  * free ones, and then turn all black blocks white again. All nursery and
- * survivor arenas are simply recycled as free arenas.
+ * survivor arenas are simply recycled as free arenas, since the still-reachable 
+ * entries have been moved to the next generation already.
  * */
 
 typedef void* arena;
@@ -97,5 +98,7 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, uint64_t *v);
 #define allocator_gc_add_root_fp(gc, v) if (!value_is_immediate(*v)) { allocator_gc_add_root(gc, v); }
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m);
 void allocator_gc_perform(struct allocator_gc_ctx *gc);
+
+extern long total_gc_time_us;
 
 #endif /* HEAP_H */

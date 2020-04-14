@@ -71,7 +71,7 @@ void dump_arena_meta(arena a) {
     hexdump(cp+128+8192, 32);
 }
 
-// XXX with nursery we need some sort of arean freelist
+// XXX with nursery we need some sort of arena freelist
 arena alloc_arena(struct allocator *a, uint8_t type) {
     if (!a->arenas_free_list) {
         void *test = NULL;
@@ -103,7 +103,8 @@ arena alloc_arena(struct allocator *a, uint8_t type) {
 
 void free_arena(struct allocator *a, arena r) {
     assert(r != NULL);
-    memset(r, 0x25, ARENA_SIZE);
+    struct arena_header *ah = r;
+    memset(r, 0x20 + ah->arena_type, ARENA_SIZE);
     // XXX assert it is empty?
     *(void**)r = a->arenas_free_list;
     a->arenas_free_list = r;
@@ -231,11 +232,25 @@ void allocator_free(struct allocator *a) {
     free(a);
 }
 
+int alloc_count_nursery = 0;
+int alloc_count_survivor = 0;
+int alloc_count_tenured = 0;
+
+void dump_clear_alloc_stats(void) {
+    fprintf(stderr, "#   nursery allocations:  %i\n", alloc_count_nursery);
+    fprintf(stderr, "#   survivor allocations: %i\n", alloc_count_survivor);
+    fprintf(stderr, "#   tenured allocations:  %i\n", alloc_count_tenured);
+    alloc_count_nursery = 0;
+    alloc_count_survivor = 0;
+    alloc_count_tenured = 0;
+}
+
 cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
     // XXX a different way to assess pressure...
     a->pressure++;
 
     if (type == ARENA_TYPE_TENURED) {
+        alloc_count_tenured++;
         arena current_arena = a->first_tenured;
         do {
             cell ret = alloc_block_tenured(current_arena, s);
@@ -267,10 +282,12 @@ cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
     else {
         arena current_arena = NULL;
         if (type == ARENA_TYPE_NURSERY) {
-             current_arena = a->first_nursery;
+            alloc_count_nursery++;
+            current_arena = a->first_nursery;
         }
         else if (type == ARENA_TYPE_NEW_SURVIVOR) {
-             current_arena = a->first_survivor;
+            alloc_count_survivor++;
+            current_arena = a->first_survivor;
         }
         do {
             cell ret = alloc_block_bump(current_arena, s);
@@ -374,8 +391,11 @@ long currentmicros() {
     return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
 }
 
+long total_gc_time_us = 0;
+
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
-    //fprintf(stderr, "# Doing GC after %i allocations (threshold %i)\n", gc->a->pressure, arg_gc_threshold);
+    fprintf(stderr, "# Doing GC after %i allocations (threshold %i)\n", gc->a->pressure, arg_gc_threshold);
+    dump_clear_alloc_stats();
     long mark_start = currentmicros();
 
     gc->a->pressure = 0;
@@ -597,7 +617,11 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 //    fflush(stdout);
     long sweep_end = currentmicros();
 
-    //printf("GC done with mark phase of %lius and sweep of %lius\n", mark_end - mark_start, sweep_end - mark_end);
+    fprintf(stderr, "# GC done with mark phase of %lius and sweep of %lius\n", mark_end - mark_start, sweep_end - mark_end);
+    dump_clear_alloc_stats();
+    fprintf(stderr, "\n");
+
+    total_gc_time_us += sweep_end - mark_start;
 
     free(gc->list);
     free(gc);

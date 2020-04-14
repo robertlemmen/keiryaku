@@ -6,6 +6,8 @@
 #include <errno.h>
 #include <getopt.h>
 #include <pwd.h>
+// XXX just for the elapsed time
+#include <time.h>
 
 #include "heap.h"
 #include "parse.h"
@@ -79,6 +81,9 @@ int main(int argc, char **argv) {
     char *history_file = NULL;
     bool load_compiler = true;
     char *script_file = NULL;
+
+    struct timespec start, end;
+    clock_gettime(CLOCK_MONOTONIC, &start);
 
     if (getenv("KEIRYAKU_GC_THRESHOLD")) {
         arg_gc_threshold = atoi(getenv("KEIRYAKU_GC_THRESHOLD"));
@@ -193,6 +198,12 @@ int main(int argc, char **argv) {
     if (history_file) {
         free(history_file);
     }
+
+    clock_gettime(CLOCK_MONOTONIC, &end);
+    long elapsed_us =   (end.tv_sec * 1000000 + end.tv_nsec / 1000)
+                      - (start.tv_sec * 1000000 + start.tv_nsec / 1000);
+    fprintf(stderr, "# total elapsed: %7lius\n", elapsed_us);
+    fprintf(stderr, "# total GC time: %7lius\n", total_gc_time_us);
 
     return 0;
 }
