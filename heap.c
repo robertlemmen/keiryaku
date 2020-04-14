@@ -295,8 +295,14 @@ cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
                 struct arena_header *ah = current_arena;
                 arena new_arena = alloc_arena(a, ah->arena_type);
                 struct arena_header *nah = new_arena;
-                nah->next = a->first_tenured;
-                a->first_nursery = new_arena;
+                if (type == ARENA_TYPE_NURSERY) {
+                    nah->next = a->first_nursery;
+                    a->first_nursery = new_arena;
+                }
+                else if (type == ARENA_TYPE_NEW_SURVIVOR) {
+                    nah->next = a->first_survivor;
+                    a->first_survivor = new_arena;
+                }
                 current_arena = new_arena;
             }
             else {
