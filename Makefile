@@ -2,7 +2,7 @@ CFLAGS ?= -std=c11 -D_GNU_SOURCE -pthread -Wall -g
 CC := gcc
 TARGET := keiryaku
 
-SOURCES := $(shell ls *.c)
+SOURCES := $(filter-out version.c, $(shell ls *.c))
 OBJECTS := $(subst .c,.o,$(SOURCES))
 
 GIT_HASH := $(shell git log -1 --pretty=format:g%h)
@@ -13,13 +13,7 @@ VERSION_STRING := $(if $(GIT_TAG),$(GIT_TAG),$(GIT_HASH))$(if $(GIT_DIRTY), (dir
 .PHONY: clean test
 
 $(TARGET): $(OBJECTS)
-	@VERSION_STRING=$$GIT_TAG; \
-	 if [ ! -z "$$GIT_TAG" ]; \
-	 then \
-	     VERSION_STRING=$$GIT_TAG; \
-	 fi; \
-	 export VERSION_STRING=test234; \
-	 cat version.c.template | sed -e 's/\%VERSION_STRING\%/$(VERSION_STRING)/' > version.c
+	@cat version.c.template | sed -e 's/\%VERSION_STRING\%/$(VERSION_STRING)/' > version.c
 	@echo "Linking $@..."
 	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ version.c
 	@rm -f version.c
