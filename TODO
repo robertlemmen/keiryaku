@@ -1,6 +1,5 @@
 language completeness
 ---------------------
-+ (apply + '(1 2 (+ 4 5))) can't be right
 + more tests for srfi-1
 - assoc should support 3-arity comparator case, see member
 
@@ -26,7 +25,7 @@ memory management
 -----------------
 - with gcbench1.ss and --gc-threshold 90000 we run into an assertion
 - where do all the non-moving allocs come from? is there a way to reduce the
-  number? probably env_bind()
+  number? it's env_bind and env_new together
 - adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
 - do not trace into tenured on young GC, needs write barriers
 - properly scan heap for free block when request > 1 cell

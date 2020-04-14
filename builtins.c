@@ -10,7 +10,9 @@
 value builtin_plus(struct allocator *alloc, value l) {
     int ret = 0;
     while (value_type(l) == TYPE_CONS) {
-        ret += intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret += intval(num);
         l = cdr(l);    
     }
 
@@ -23,7 +25,9 @@ value builtin_minus(struct allocator *alloc, value l) {
     int count = 0;
     int first = 0;
     while (value_type(l) == TYPE_CONS) {
-        ret -= intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret -= intval(num);
         if (!count) {
             first = ret;
         }
@@ -39,7 +43,9 @@ value builtin_minus(struct allocator *alloc, value l) {
 value builtin_mul(struct allocator *alloc, value l) {
     int ret = 1;
     while (value_type(l) == TYPE_CONS) {
-        ret *= intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret *= intval(num);
         l = cdr(l);    
     }
 
@@ -53,7 +59,9 @@ value builtin_div(struct allocator *alloc, value l) {
     int ret = intval(car(l));
     l = cdr(l);    
     while (value_type(l) == TYPE_CONS) {
-        ret /= intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret /= intval(num);
         l = cdr(l);    
     }
 

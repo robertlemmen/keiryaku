@@ -15,7 +15,8 @@
 // be mostly very small with a few (like the top env) long-tail outliers. in
 // that case it would make sense to use a capacity buffer and increase in size
 // when it would overrun. that would also allow us to order the entries, so a
-// lookup would be O(log(n)) with a binary chop
+// lookup would be O(log(n)) with a binary chop. most envs do have few (but
+// more than one) entries, the top a few hundred.
 struct interp_env_entry {
     value name;
     value value;
