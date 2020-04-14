@@ -24,6 +24,9 @@ technicalities
 
 memory management
 -----------------
+- with gcbench1.ss and --gc-threshold 90000 we run into an assertion
+- where do all the non-moving allocs come from? is there a way to reduce the
+  number? probably env_bind()
 - adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
 - do not trace into tenured on young GC, needs write barriers
 - properly scan heap for free block when request > 1 cell
@@ -32,6 +35,6 @@ memory management
 
 performance
 -----------
-+ interp_nev_entry should not be linked list
++ interp_env_entry should not be linked list
 - vectors could be direct pointers (?)
 - more symbols could be replaced with vectors (?)

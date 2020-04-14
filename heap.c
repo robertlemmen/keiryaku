@@ -31,8 +31,6 @@
 #define ARENA_TYPE_NEW_SURVIVOR     2
 #define ARENA_TYPE_TENURED          3
 
-#define NUM_START_ARENAS            10
-
 struct allocator {
     arena first_nursery;
     arena first_survivor;
@@ -74,18 +72,15 @@ void dump_arena_meta(arena a) {
 // XXX with nursery we need some sort of arena freelist
 arena alloc_arena(struct allocator *a, uint8_t type) {
     if (!a->arenas_free_list) {
-        void *test = NULL;
-        posix_memalign(&test, ARENA_SIZE, ARENA_SIZE*NUM_START_ARENAS);
-        //printf("chunk-allocating new arenas at %p\n", test);
-        a->arenas_free_list = test;
-        for (int i = 0; i < NUM_START_ARENAS-2; i++) {
-            *(void**)test = test + ARENA_SIZE;
-            test = *(void**)test;
-        }
-        *(void**)test = NULL;
+        void *temp = NULL;
+        posix_memalign(&temp, ARENA_SIZE, ARENA_SIZE);
+        a->arenas_free_list = temp;
+        struct arena_header *at = temp;
+        at->next = NULL;
     }
     arena ret = a->arenas_free_list;
-    a->arenas_free_list = *(void**)ret;
+    struct arena_header *ah = ret;
+    a->arenas_free_list = ah->next;
     assert(ret != NULL);
     assert(cell_index(ret) == 0);
 
@@ -93,7 +88,6 @@ arena alloc_arena(struct allocator *a, uint8_t type) {
     memset(ret + BITMAP_SIZE, 0xff, BITMAP_SIZE);
     memset(ret + BITMAP_SIZE, 0, 128);
 
-    struct arena_header *ah = ret;
     ah->arena_type = type;
     ah->scan_cache = 1024; // first actual cell
 
@@ -106,7 +100,15 @@ void free_arena(struct allocator *a, arena r) {
     struct arena_header *ah = r;
     memset(r, 0x20 + ah->arena_type, ARENA_SIZE);
     // XXX assert it is empty?
-    *(void**)r = a->arenas_free_list;
+    free(r);
+}
+
+void recycle_arena(struct allocator *a, arena r) {
+    assert(r != NULL);
+    struct arena_header *ah = r;
+    memset(r, 0x30 + ah->arena_type, ARENA_SIZE);
+    // XXX assert it is empty?
+    ah->next = a->arenas_free_list;
     a->arenas_free_list = r;
 }
 
@@ -224,12 +226,30 @@ void allocator_free(struct allocator *a) {
     assert(a->first_nursery != NULL);
     assert(a->first_survivor != NULL);
     assert(a->first_tenured != NULL);
-    free_arena(a, a->first_nursery);
-    free_arena(a, a->first_survivor);
-    free_arena(a, a->first_tenured);
-    // XXX clean up arenas free list, which is diffifult because it was
-    // allocated en masse... let's just leave it to the OS for now
-    free(a);
+    while (a->first_nursery) {
+        arena temp = a->first_nursery;
+        struct arena_header *ah = temp;
+        a->first_nursery = ah->next;
+        free_arena(a, temp);
+    }
+    while (a->first_survivor) {
+        arena temp = a->first_survivor;
+        struct arena_header *ah = temp;
+        a->first_survivor = ah->next;
+        free_arena(a, temp);
+    }
+    while (a->first_tenured) {
+        arena temp = a->first_tenured;
+        struct arena_header *ah = temp;
+        a->first_tenured = ah->next;
+        free_arena(a, temp);
+    }
+    while (a->arenas_free_list) {
+        arena temp = a->arenas_free_list;
+        struct arena_header *ah = temp;
+        a->arenas_free_list = ah->next;
+        free_arena(a, temp);
+    }
 }
 
 int alloc_count_nursery = 0;
@@ -609,14 +629,14 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     // XXX some sort of free list
     while (gc->a->first_nursery) {
         arena temp = ((struct arena_header*)gc->a->first_nursery)->next;
-        free_arena(gc->a, gc->a->first_nursery);
+        recycle_arena(gc->a, gc->a->first_nursery);
         gc->a->first_nursery = temp;
     }
     gc->a->first_nursery = alloc_arena(gc->a, ARENA_TYPE_NURSERY);
 
     while (old_survivor) {
         arena temp = ((struct arena_header*)old_survivor)->next;
-        free_arena(gc->a, old_survivor);
+        recycle_arena(gc->a, old_survivor);
         old_survivor = temp;
     }
 //    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
