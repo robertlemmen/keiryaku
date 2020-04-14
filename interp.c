@@ -435,7 +435,7 @@ tailcall_label:
                     case VALUE_SP_LETREC:
                         arg_count = interp_collect_list(args, 2, &f->locals[1]);
                         if (arg_count != 2) {
-                            fprintf(stderr, "Arity error in application of special 'let': expected 2 args but got %i\n",
+                            fprintf(stderr, "Arity error in application of special 'let/let*/letrec': expected 2 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
@@ -461,7 +461,7 @@ tailcall_label:
                             // XXX is there not a way this can be evaled?
                             f->locals[6] = car(f->locals[4]);
                             if (!value_is_symbol(f->locals[6])) {
-                                fprintf(stderr, "first part of arg binding to let is not a symbol\n");
+                                fprintf(stderr, "first part of arg binding to let/let*/letrec is not a symbol\n");
                                 return VALUE_NIL;
                             }
                             if (special == VALUE_SP_LET) {
