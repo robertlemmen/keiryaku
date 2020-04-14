@@ -2,7 +2,6 @@ language completeness
 ---------------------
 + (apply + '(1 2 (+ 4 5))) can't be right
 + more tests for srfi-1
-+ --debug-compiler (and possibly others) does not work in script mode anymore
 - assoc should support 3-arity comparator case, see member
 
 core features

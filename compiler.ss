@@ -120,62 +120,62 @@
         (cdr (cdr (cdr (cdr arg))))))
 
 (define _emit-cond-body
-    (lambda (ex next _compile)
+    (lambda (ex next _compile_int)
         (if (cdr ex) 
             (if (eq? (cadr ex) '=>)
 ; XXX this really needs a let in the resulting code rather than running (car ex)
 ; twice. also probably doesn't work for an inline-defined lambda, another let
-                (list 'if (_compile (car ex)) (list (_compile (caddr ex)) (_compile (car ex))) (_emit-cond-case next _compile)) 
-                (list 'if (_compile (car ex)) (list 'begin (_compile (cadr ex))) (_emit-cond-case next _compile)) )
-            (list 'if (_compile (car ex)) (list 'begin (_compile (cadr ex))) (_emit-cond-case next _compile)) )))
+                (list 'if (_compile_int (car ex)) (list (_compile_int (caddr ex)) (_compile_int (car ex))) (_emit-cond-case next _compile_int)) 
+                (list 'if (_compile_int (car ex)) (list 'begin (_compile_int (cadr ex))) (_emit-cond-case next _compile_int)) )
+            (list 'if (_compile_int (car ex)) (list 'begin (_compile_int (cadr ex))) (_emit-cond-case next _compile_int)) )))
 
 (define _emit-cond-case
-    (lambda (ex _compile) 
+    (lambda (ex _compile_int) 
         (if (null? ex)
             '()
             (if (eq? (caar ex) 'else)
-                (_compile (cadar ex))
-                (_emit-cond-body (car ex) (cdr ex) _compile))) ))
+                (_compile_int (cadar ex))
+                (_emit-cond-body (car ex) (cdr ex) _compile_int))) ))
 
 
 ; XXX too many lambdas to support case, fold them together
 (define _emit-case-body
-    (lambda (ex _compile)
+    (lambda (ex _compile_int)
         (if (eq? (car ex) '=>)
             (list 'let (list (list 'func (cadr ex))) (list 'func 'result))
             (car ex) )))
 
 (define _emit-case-entry
-    (lambda (ex _compile)
+    (lambda (ex _compile_int)
         (if (null? (cdr ex))
             (if (eq? (caar ex) 'else)
-                (_emit-case-body (cdar ex) _compile)
+                (_emit-case-body (cdar ex) _compile_int)
                 (list 'if (list 'memv 'result (list 'quote (caar ex))) (cadar ex) #f))
-            (list 'if (list 'memv 'result (list 'quote (caar ex))) (_emit-case-body (cdar ex) _compile) (_emit-case-entry (cdr ex) _compile)) )))
+            (list 'if (list 'memv 'result (list 'quote (caar ex))) (_emit-case-body (cdar ex) _compile_int) (_emit-case-entry (cdr ex) _compile_int)) )))
 
 (define _emit-case-case
-    (lambda (ex _compile)
-        (list 'let (list (list 'result (_compile (car ex)))) (_emit-case-entry (cdr ex) _compile)) ))
+    (lambda (ex _compile_int)
+        (list 'let (list (list 'result (_compile_int (car ex)))) (_emit-case-entry (cdr ex) _compile_int)) ))
 
 
 (define _emit-and-case
-    (lambda (ex _compile)
+    (lambda (ex _compile_int)
         (if (pair? ex)
             (if (null? (cdr ex))
 ; XXX I bet the let needs to be in the emitted syntax, not to call this twice.
 ; same for 'or' below
-                (let [(cex (_compile (car ex)))]
+                (let [(cex (_compile_int (car ex)))]
                     (list 'if cex cex #f))
-                (list 'if (_compile (car ex)) (_emit-and-case (cdr ex) _compile) #f))
+                (list 'if (_compile_int (car ex)) (_emit-and-case (cdr ex) _compile_int) #f))
             ex)))
 
 (define _emit-or-case
-    (lambda (ex _compile)
+    (lambda (ex _compile_int)
         (if (pair? ex)
-            (let [(cex (_compile (car ex)))]
+            (let [(cex (_compile_int (car ex)))]
                 (if (null? (cdr ex))
                     (list 'if cex cex #f)
-                    (list 'if cex cex (_emit-and-case (cdr ex) _compile))))
+                    (list 'if cex cex (_emit-and-case (cdr ex) _compile_int))))
             ex)))
 
 ; XXX what are these two for?
@@ -191,56 +191,56 @@
     (lambda args
         args))
         
-(define _compile
+(define _compile_int
     (let [
         (compile-and
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (if (null? ex)
                     #t
-                    (_emit-and-case ex _compile))))
+                    (_emit-and-case ex _compile_int))))
         (compile-or
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (if (null? ex)
                     #f
-                    (_emit-or-case ex _compile))))
+                    (_emit-or-case ex _compile_int))))
         (compile-not
-            (lambda (ex _compile)
-                (list 'if (_compile (car ex)) #f #t) ))
+            (lambda (ex _compile_int)
+                (list 'if (_compile_int (car ex)) #f #t) ))
         (compile-cond
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
 ; XXX darn seems we need the recursive let version, then we can avoid the extra
 ; define above
-                (_emit-cond-case ex _compile)) )
+                (_emit-cond-case ex _compile_int)) )
         (compile-case
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
 ; XXX darn seems we need the recursive let version, then we can avoid the extra
 ; define above
-                (_emit-case-case ex _compile)) )
+                (_emit-case-case ex _compile_int)) )
         (compile-make-vector
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (if (null? (cdr ex))
                     (cons 'make-vector (cons (car ex) (list 0)))
                     (cons 'make-vector ex))))
         (compile-let
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (if (null? (cddr ex))
-                    (cons 'let (_compile ex))
+                    (cons 'let (_compile_int ex))
                     (if (symbol? (car ex))
                         (list 'let* (list
                             (list (car ex) ; body name
                             (list 'lambda
                                 (map car (cadr ex)) ; formals
-                                (_compile (caddr ex))))) ; body thunk
+                                (_compile_int (caddr ex))))) ; body thunk
                                 (cons (car ex) (map cadr (cadr ex)))) ; call with initials
                         ; XXX this case most likely needs a compile as well!
                         (list 'let (car ex) (cons 'begin (cdr ex)))))))
         (compile-arity2-member
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (if (null? (cddr ex))
                     (list '_memberg (car ex) (cadr ex) 'equal?)
                     (cons '_memberg ex))))
         (compile-do
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (let [(var-list (map car (car ex)))
                     (initial-vals  (map cadr (car ex)))
                     (test (caadr ex))
@@ -249,52 +249,67 @@
         ; XXX using an empty list here is a bit ugly, we should really not use a body at
         ; all!
                     (body (if (pair? (cddr ex)) (caddr ex) '()))]
-                    (_compile (list 'letrec* (list (list '_body (list 'lambda var-list (list 'if test retval 
+                    (_compile_int (list 'letrec* (list (list '_body (list 'lambda var-list (list 'if test retval 
                         (list 'begin body (cons '_body increment)))))) (cons '_body initial-vals))))))
         (compile-define
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (if (list? (car ex))
-                    (list 'define (caar ex) (_compile (cons 'lambda (cons (cdar ex) (cdr ex)))))
+                    (list 'define (caar ex) (_compile_int (cons 'lambda (cons (cdar ex) (cdr ex)))))
                     (if (pair? (car ex))
                         ; XXX wtf? why is this the same as the one above?
-                        (list 'define (caar ex) (_compile (cons 'lambda (cons (cdar ex) (cdr ex)))))
+                        (list 'define (caar ex) (_compile_int (cons 'lambda (cons (cdar ex) (cdr ex)))))
                         ; XXX this one probably swallows multiple body
                         ; statements before running compile on them
-                        (list 'define (car ex) (_compile (cadr ex)))))))
+                        (list 'define (car ex) (_compile_int (cadr ex)))))))
         (compile-lambda
-            (lambda (ex _compile)
+            (lambda (ex _compile_int)
                 (if (null? (cddr ex))
-                    (cons 'lambda (_compile ex))
-                    (list 'lambda (car ex) (cons 'begin (_compile (cdr ex)))))))
+                    (cons 'lambda (_compile_int ex))
+                    (list 'lambda (car ex) (cons 'begin (_compile_int (cdr ex)))))))
         ]
         (lambda (ex)
             (if (pair? ex)
                 (if (eq? (car ex) 'and)
-                    (compile-and (cdr ex) _compile)
+                    (compile-and (cdr ex) _compile_int)
                     (if (eq? (car ex) 'or)
-                        (compile-or (cdr ex) _compile)
+                        (compile-or (cdr ex) _compile_int)
                         (if (eq? (car ex) 'not)
-                            (compile-not (cdr ex) _compile)
+                            (compile-not (cdr ex) _compile_int)
                             (if (eq? (car ex) 'cond)
-                                (compile-cond (cdr ex) _compile)
+                                (compile-cond (cdr ex) _compile_int)
                                 (if (eq? (car ex) 'case)
-                                    (compile-case (cdr ex) _compile)
+                                    (compile-case (cdr ex) _compile_int)
                                     (if (eq? (car ex) 'let)
-                                        (compile-let (cdr ex) _compile)
+                                        (compile-let (cdr ex) _compile_int)
                                         (if (eq? (car ex) 'member)
-                                            (compile-arity2-member (cdr ex) _compile)
+                                            (compile-arity2-member (cdr ex) _compile_int)
                                             (if (eq? (car ex) 'quote)
                                                 ex
                                                 (if (eq? (car ex) 'make-vector)
-                                                    (compile-make-vector (cdr ex) _compile)
+                                                    (compile-make-vector (cdr ex) _compile_int)
                                                     (if (eq? (car ex) 'do)
-                                                        (compile-do (cdr ex) _compile)
+                                                        (compile-do (cdr ex) _compile_int)
                                                         (if (eq? (car ex) 'define)
-                                                            (compile-define (cdr ex) _compile)
+                                                            (compile-define (cdr ex) _compile_int)
                                                             (if (eq? (car ex) 'lambda)
-                                                                (compile-lambda (cdr ex) _compile)
-                                                                (cons (_compile (car ex)) (_compile (cdr ex)))))))))))))))
+                                                                (compile-lambda (cdr ex) _compile_int)
+                                                                (cons (_compile_int (car ex)) (_compile_int (cdr ex)))))))))))))))
                 ex))))
+
+(define _compile
+  (lambda (expr)
+    (let ((result (_compile_int expr)))
+      (if _arg-debug-compiler
+        (begin 
+          (write-string "\n" stdout)
+          (write-string "// parsed expression: " stdout)
+          (write expr stdout)
+          (write-string "\n" stdout)
+          (write-string "// compiled expression: " stdout)
+          (write result stdout)
+          (write-string "\n" stdout)
+          result)
+        result))))
 
 ; some base environment, should probably be separate from compiler, and should
 ; use compiler
