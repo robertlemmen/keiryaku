@@ -89,6 +89,40 @@ START_TEST(test_heap_02) {
 }
 END_TEST
 
+START_TEST(test_heap_03) {
+    printf("- test_heap_03: verify the first-fit behavior\n");
+    struct allocator *a = allocator_new();
+
+    cell item_a = allocator_alloc_nonmoving(a, 16);
+    cell item_b = allocator_alloc_nonmoving(a, 32);
+    cell item_c = allocator_alloc_nonmoving(a, 16);
+    cell item_d = allocator_alloc_nonmoving(a, 48);
+    cell item_e = allocator_alloc_nonmoving(a, 16);
+
+    ck_assert(item_a + 16 == item_b);
+    ck_assert(item_b + 32 == item_c);
+    ck_assert(item_c + 16 == item_d);
+    ck_assert(item_d + 48 == item_e);
+
+    struct allocator_gc_ctx *gc_ctx = allocator_gc_new(a);
+    allocator_gc_add_nonval_root(gc_ctx, item_a);
+    allocator_gc_add_nonval_root(gc_ctx, item_c);
+    allocator_gc_add_nonval_root(gc_ctx, item_e);
+    allocator_gc_perform(gc_ctx);
+
+    cell item_f = allocator_alloc_nonmoving(a, 16);
+    cell item_g = allocator_alloc_nonmoving(a, 32);
+    cell item_h = allocator_alloc_nonmoving(a, 16);
+    cell item_i = allocator_alloc_nonmoving(a, 16);
+
+    ck_assert(item_a + 16 == item_f);
+    ck_assert(item_f + 16 == item_h);
+    ck_assert(item_c + 16 == item_g);
+    ck_assert(item_g + 32 == item_i);
+
+    allocator_free(a);
+}
+END_TEST
 
 TCase* make_heap_checks(void) {
     TCase *tc_types;
@@ -96,6 +130,7 @@ TCase* make_heap_checks(void) {
     tc_types = tcase_create("heap");
     tcase_add_test(tc_types, test_heap_01);
     tcase_add_test(tc_types, test_heap_02);
+    tcase_add_test(tc_types, test_heap_03);
 
     return tc_types;
 }

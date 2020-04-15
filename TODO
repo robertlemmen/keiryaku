@@ -29,7 +29,6 @@ memory management
 - adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
 - do not trace into tenured on young GC, needs write barriers and that all
   objects that are allocated directly into tenured (nonmoving) are also roots
-- properly scan heap for free block when request > 1 cell
 - clean up empty arenas at end, to find stuff that we failed to collect
 - destructor-on-gc e.g. for ports? kinda requires a second, dumber GC tracking
   for these special objects. perhaps ok, there should be few of these...

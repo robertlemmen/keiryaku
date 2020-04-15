@@ -117,8 +117,6 @@ void recycle_arena(struct allocator *a, arena r) {
     a->arenas_free_list = r;
 }
 
-extern int call_count;
-
 block alloc_block_bump(arena a, int s) {
     assert(a != NULL);
     block ret = NULL;
@@ -139,7 +137,7 @@ block alloc_block_bump(arena a, int s) {
         meta_set_block(a, cell_idx);
         meta_clear_mark(a, cell_idx);
         for (int i = 1; i < cc; i++) {
-            meta_clear_block(a, cell_idx + i); // XXX one of these two is already cleared??
+            // block bit is already cleared
             meta_clear_mark(a, cell_idx + i);
         }
         cell_idx += cc;
@@ -178,20 +176,43 @@ block alloc_block_tenured(arena a, int s) {
         ret = a + cell_idx * 16;
     }
     else {
-        for (int i = 1; i < cc; i++) {
-            if (meta_get_block(a, cell_idx + i) || ! meta_get_mark(a, cell_idx + i)) {
-                // XXX handle properly, scan to next free block rather than just
-                // pick a new arena
-                return NULL;
+        // check that we have enough free adjacent cells
+        bool found = false;
+        while ((cell_idx < 65536 - cc) && !found) {
+            found = true;
+            for (int i = 1; i < cc; i++) {
+                // we can use free cells as well as extents
+                if (meta_get_block(a, cell_idx + i)) {
+                    found = false;
+                    cell_idx += i;
+                    break;
+                }
+            }
+            if (!found) {
+                // scan to the next candidate
+                while (    (cell_idx < 65536 - cc)
+                        && (meta_get_block(a, cell_idx) || !meta_get_mark(a, cell_idx))) {
+                    cell_idx++;
+                }
             }
         }
+        if (!found) {
+            return NULL;
+        }
+
         meta_set_block(a, cell_idx);
         meta_clear_mark(a, cell_idx);
         for (int i = 1; i < cc; i++) {
-            meta_clear_block(a, cell_idx + i); // XXX one of these two is already cleared...
+            // block bit is already cleared
             meta_clear_mark(a, cell_idx + i);
         }
         ret = a + cell_idx * 16;
+
+        // we also need to check of the next cell after this allocation is
+        // an extent, and if so turn into a free cell
+        if (!meta_get_block(a, cell_idx + cc) && !meta_get_mark(a, cell_idx + cc)) {
+            meta_set_mark(a, cell_idx + cc);
+        }
     }
     if (arg_debug) {
         memset(ret, 0x17, s);
