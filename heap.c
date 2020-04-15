@@ -42,6 +42,10 @@ struct allocator {
 struct arena_header {
     uint8_t arena_type;
     arena next;
+    /* in a bump allocator, scan_cache simply is the first free cell that we
+     * will use next. In a block allocator, we use this as a lower bound where
+     * we never look at cells before this, to avoid scanning them again and
+     * again */
     uint16_t scan_cache;
 };
 
@@ -154,52 +158,40 @@ block alloc_block_tenured(arena a, int s) {
     block ret = NULL;
 
     struct arena_header *ah = a;
+    uint_fast16_t cc = ((s + 15) & ~15) >> 4; // number of cells required
     uint_fast16_t cell_idx = ah->scan_cache;
 
-    if (cell_idx == 0) {
-        // this arena is entirely full
+    // scan to first free cell
+    while ((cell_idx < 65536 - cc) && (meta_get_block(a, cell_idx) || !meta_get_mark(a, cell_idx))) {
+        cell_idx++;
+    }
+    if (cell_idx >= 65536 - cc) {
+        // the arena is mostly full, the block will not fit
         return NULL;
     }
+    ah->scan_cache = cell_idx;
 
-    uint_fast16_t cc = ((s + 15) & ~15) >> 4; // number of cells required
-
-    assert(!meta_get_block(a, cell_idx));
-    assert(meta_get_mark(a, cell_idx));
     if (cc == 1) {
         meta_set_block(a, cell_idx);
         meta_clear_mark(a, cell_idx);
         ret = a + cell_idx * 16;
-        ah->scan_cache++;
     }
     else {
         for (int i = 1; i < cc; i++) {
-            // XXX we also take extents, which actually makes this easier
             if (meta_get_block(a, cell_idx + i) || ! meta_get_mark(a, cell_idx + i)) {
-                // the free block is not long enough
-                // XXX handle properly, we should scan to next one but not
-                // update scan_cache
-//                printf("free block is not large enough\n");
+                // XXX handle properly, scan to next free block rather than just
+                // pick a new arena
                 return NULL;
             }
         }
         meta_set_block(a, cell_idx);
         meta_clear_mark(a, cell_idx);
-        ah->scan_cache++;
         for (int i = 1; i < cc; i++) {
             meta_clear_block(a, cell_idx + i); // XXX one of these two is already cleared...
             meta_clear_mark(a, cell_idx + i);
-            ah->scan_cache++;
         }
         ret = a + cell_idx * 16;
     }
-    // scan to next free cell
-    cell_idx = ah->scan_cache;
-    while ((ah->scan_cache != 0) && (meta_get_block(a, cell_idx) || !meta_get_mark(a, cell_idx))) {
-        cell_idx++;
-    }
-    ah->scan_cache = cell_idx;
-    cell_idx = cell_index(ret);
-    assert(!meta_get_mark(a, cell_idx));
     if (arg_debug) {
         memset(ret, 0x17, s);
     }
@@ -596,21 +588,12 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             }
         }
         struct arena_header *ah = a;
-        // reset scan_cache
-        uint_fast16_t cell_idx = 1024;
-        while ((ah->scan_cache != 0) && (meta_get_block(a, cell_idx) || !meta_get_mark(a, cell_idx))) {
-            cell_idx++;
-        }
-        if (ah->scan_cache != 0) {
-            assert(!meta_get_block(a, cell_idx));
-            assert(meta_get_mark(a, cell_idx));
-        }
-        ah->scan_cache = cell_idx;
-//        printf("scan_cache for arena 0x%016lX is %d\n", a, cell_idx);
+        // reset scan_cache, we can just set this as it is only a lower bound
+        ah->scan_cache = 1024;
         a = ah->next;
-    // XXX faster unmark: flip a bit in the allocator and check for equals that in
-    // get_mark/set_mark. new arenas need to be created with that bit set
-    // correctly!
+        // XXX faster unmark: flip a bit in the allocator and check for equals that in
+        // get_mark/set_mark. new arenas need to be created with that bit set
+        // correctly!
     }
 
     // also unmark the survivor pages

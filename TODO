@@ -1,11 +1,12 @@
 language completeness
 ---------------------
 + more tests for srfi-1
++ and port more basic r7rs tests from chibi
 - assoc should support 3-arity comparator case, see member
 
 core features
 -------------
-- raise and friends
++ raise and friends
 - call/cc, also unlocks (values ...) and friends
 
 technicalities
@@ -15,7 +16,7 @@ technicalities
 - implement argument overflow logic in interp.c eval frame
 - turn push-parsing into pulling style, move parser out of types
 - equals? needs implementation for vectors
-- equals? should support cyclic structres, also dump_values and list?
+- equals? should support cyclic structures, also dump_values and list?
 - refactor type tagging, use all lower bits to signal immediate, to yield
   more non-immediate types
 - reduce includes-graph
@@ -23,14 +24,15 @@ technicalities
 
 memory management
 -----------------
-- with gcbench1.ss and --gc-threshold 90000 we run into an assertion
 - where do all the non-moving allocs come from? is there a way to reduce the
   number? it's env_bind and env_new together
 - adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
-- do not trace into tenured on young GC, needs write barriers
+- do not trace into tenured on young GC, needs write barriers and that all
+  objects that are allocated directly into tenured (nonmoving) are also roots
 - properly scan heap for free block when request > 1 cell
 - clean up empty arenas at end, to find stuff that we failed to collect
-- destructor-on-gc e.g. for ports?
+- destructor-on-gc e.g. for ports? kinda requires a second, dumber GC tracking
+  for these special objects. perhaps ok, there should be few of these...
 
 performance
 -----------
