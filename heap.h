@@ -83,6 +83,7 @@ cell allocator_alloc(struct allocator *a, int s);
 cell allocator_alloc_nonmoving(struct allocator *a, int s);
 
 bool allocator_needs_gc(struct allocator *a);
+void allocator_request_gc(struct allocator *a);
 
 struct allocator_gc_ctx;
 

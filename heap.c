@@ -37,6 +37,7 @@ struct allocator {
     arena first_tenured;
     arena arenas_free_list;
     int pressure;
+    bool gc_requested;
 };
 
 struct arena_header {
@@ -338,7 +339,11 @@ cell allocator_alloc_nonmoving(struct allocator *a, int s) {
 }
 
 bool allocator_needs_gc(struct allocator *a) {
-    return a->pressure > arg_gc_threshold;
+    return (a->pressure > arg_gc_threshold) || a->gc_requested;
+}
+
+void allocator_request_gc(struct allocator *a) {
+    a->gc_requested = true;
 }
 
 // XXX use posix_memalign for this, and assert it has the right size.
@@ -417,6 +422,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     long mark_start = currentmicros();
 
     gc->a->pressure = 0;
+    gc->a->gc_requested = false;
 
 //    int roots = gc->list->count;
     int visited = 0;

@@ -389,6 +389,11 @@ value builtin_compile_stub(struct allocator *alloc, value v) {
     return v;
 }
 
+value builtin_request_gc(struct allocator *alloc) {
+    allocator_request_gc(alloc);
+    return VALUE_NIL;
+}
+
 value builtin_make_parameter(struct allocator *alloc, value i, value c) {
     // XXX perhaps check that c is a procedure
     return make_parameter(alloc, i, c);
@@ -464,6 +469,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_procedure, "procedure?"));
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_make_parameter, "_make-parameter"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_compile_stub, "_compile"));
+    bind_builtin_helper(alloc, env, make_builtin0(alloc, &builtin_request_gc, "_request_gc"));
     // XXX probably should not be a built-in, but enables a good test case for
     // named let
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_quotient, "truncate-quotient"));
