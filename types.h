@@ -5,8 +5,6 @@
 // XXX just for dump_value below, which needs to move to ports
 #include <stdio.h>
 
-// XXX double-check this documentation with the actual values ettc below, seems
-// out of sync!
 /* Value Representation
  *
  * values are represented as 64-bit, using tagging in the low order bits. This is
@@ -19,12 +17,12 @@
  *
  * in the case of immediate values, the next 3 bits are used to determine the type
  * of the value: 
- *   000_ - integer
- *   001_ - float
- *   010_ - enumerated
+ *   000_ - enumerated
+ *   001_ - integer
+ *   010_ - float
  *   011_ - short symbol
  *   100_ - short string
- *   101_ - lookup vector
+ *   101_ - lookup vector`
  *
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
@@ -76,10 +74,7 @@
  *  */
 
 // XXX we have to make sure that we never have CONS entries that are empty,
-// otherwise we need to support EMPTY_LIST == CONS. this might mean we can get
-// rid of NIL as well
-
-// XXX clever restructuring of this could mean EMPTY_LIST = 0 
+// otherwise we need to support EMPTY_LIST == CONS.
 
 struct allocator;
 struct allocator_gc_ctx;
@@ -91,7 +86,7 @@ struct allocator_gc_ctx;
 typedef uint64_t value;
 
 #define value_is_immediate(x) (!((x) & 1))
-#define value_to_cell(x) (void*)((x) & ~15) // XXX should be called block?
+#define value_to_cell(x) (void*)((x) & ~15)
 #define value_type(x) ((x) & 15)
 #define value_subtype(x) (*(uint8_t*)(value_to_cell(x)))
 
@@ -114,8 +109,6 @@ typedef uint64_t value;
 #define SUBTYPE_ENV             0b00
 #define SUBTYPE_PARAM           0b01
 
-// XXX we should not need a nil, but then we need to make sure there are no CONS
-// that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
 #define VALUE_NIL         0b00000000
 #define VALUE_TRUE        0b00100000
 #define VALUE_FALSE       0b01000000
