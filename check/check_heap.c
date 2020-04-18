@@ -104,6 +104,7 @@ START_TEST(test_heap_03) {
     ck_assert(item_c + 16 == item_d);
     ck_assert(item_d + 48 == item_e);
 
+    allocator_request_gc(a, true);
     struct allocator_gc_ctx *gc_ctx = allocator_gc_new(a);
     allocator_gc_add_nonval_root(gc_ctx, item_a);
     allocator_gc_add_nonval_root(gc_ctx, item_c);

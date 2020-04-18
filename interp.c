@@ -8,8 +8,6 @@
 #include "builtins.h"
 #include "heap.h"
 
-#define ENV_ENTRY_ARRAY_SIZE    8
-
 // XXX could be more efficient structure rather than linked list, e.g. a list of
 // fixed-size arrays. also check the distribution of #entries over envs, could
 // be mostly very small with a few (like the top env) long-tail outliers. in
@@ -43,6 +41,9 @@ struct interp_lambda {
     struct interp_env *env;
 };
 
+// XXX double-check that everything we ever allocate _nonmoving is added as
+// part of the initial root adding, if it comes from traversal from a younger
+// generation we could miss it
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
     struct interp_env *ret = allocator_alloc_nonmoving(alloc, (sizeof(struct interp_env)));
     ret->outer = outer;
@@ -292,7 +293,7 @@ value interp_eval_env(struct interp *i, struct call_frame *caller_frame, struct 
     }
     return ret;
 }
-
+                        
 // XXX what if lookup_cons is poiting to something that gets moved away by GC?
 inline __attribute__((always_inline))
 value interp_eval_env_int(struct interp *i, struct call_frame *f, struct dynamic_frame *dyn_frame, value lookup_cons) {
@@ -350,7 +351,7 @@ tailcall_label:
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (value_is_true(interp_eval_env(i, f, dyn_frame, f->locals[1], f->env, VALUE_NIL))) {
+                        if (interp_eval_env(i, f, dyn_frame, f->locals[1], f->env, VALUE_NIL) != VALUE_FALSE) {
                             f->expr = f->locals[2];
                             goto tailcall_label;
                         }
@@ -419,7 +420,7 @@ tailcall_label:
                             f->locals[2] = f->locals[3];
                         }
                         if (f->locals[2] != VALUE_EMPTY_LIST) {
-                            fprintf(stderr, "arguments to BEGIN are not well-formed list\n");
+                            fprintf(stderr, "arguments to special 'begin' are not well-formed list\n");
                         }
                         return f->locals[1];
                     case VALUE_SP_QUOTE:
@@ -456,13 +457,13 @@ tailcall_label:
                             // moving stuff away while we still hold a ref to it
                             f->locals[4] = car(f->locals[1]);
                             if (value_type(f->locals[4]) != TYPE_CONS) {
-                                fprintf(stderr, "arg binding to let is not a pair\n");
+                                fprintf(stderr, "arg binding to 'let/let*/letrec' is not a pair\n");
                                 return VALUE_NIL;
                             }
                             // XXX is there not a way this can be evaled?
                             f->locals[6] = car(f->locals[4]);
                             if (!value_is_symbol(f->locals[6])) {
-                                fprintf(stderr, "first part of arg binding to let/let*/letrec is not a symbol\n");
+                                fprintf(stderr, "first part of arg binding to 'let/let*/letrec' is not a symbol\n");
                                 return VALUE_NIL;
                             }
                             if (special == VALUE_SP_LET) {
@@ -675,6 +676,8 @@ apply_eval_label:
                                 return funcptr3(i->alloc,  f->locals[1], f->locals[2], f->locals[3]);
                                 break;
                             default:
+                                // XXX this is more a programmer error, assert
+                                // and abort
                                 fprintf(stderr, "Unsupported builtin arity %d\n", builtin_arity(op));
                                 return VALUE_NIL;
                         }

@@ -10,25 +10,30 @@
 #include "global.h"
 #include "ports.h"
 
-#define ARENA_SIZE 0x100000
-#define cell_to_arena(x) (arena)((uint64_t)x & 0xFFFFFFFFFFF00000)
-#define cell_index(x) (((uint64_t)x & 0x00000000000FFFFF) >> 4)
-#define cell_from_cell_index(a, i) (void*)((((uint64_t)a) & 0xFFFFFFFFFFF00000) \
-                                            | ((((uint64_t)i) << 4) & 0x00000000000FFFFF))
-#define meta_get_block(a, i)   (((uint8_t*)a)[(i) >> 3] &   (1 << (7 - ((i) & 0x07))))
-#define meta_set_block(a, i)   (((uint8_t*)a)[(i) >> 3] |=  (1 << (7 - ((i) & 0x07))))
-#define meta_clear_block(a, i) (((uint8_t*)a)[(i) >> 3] &= ~(1 << (7 - ((i) & 0x07))))
-#define meta_get_mark(a, i)   (((uint8_t*)a)[8192 + ((i) >> 3)] &   (1 << (7 - ((i) & 0x07))))
-#define meta_set_mark(a, i)   (((uint8_t*)a)[8192 + ((i) >> 3)] |=  (1 << (7 - ((i) & 0x07))))
-#define meta_clear_mark(a, i) (((uint8_t*)a)[8192 + ((i) >> 3)] &= ~(1 << (7 - ((i) & 0x07))))
+#define ARENA_SIZE                  0x100000
+#define BITMAP_SIZE                 8192
+#define GC_LIST_SIZE                1022
 
-#define BITMAP_SIZE 8192
-
-#define GC_LIST_SIZE 1022
+#define cell_to_arena(x)            (arena)((uint64_t)x & 0xFFFFFFFFFFF00000)
+#define cell_index(x)               (((uint64_t)x & 0x00000000000FFFFF) >> 4)
+#define cell_from_cell_index(a, i)  (void*)((((uint64_t)a) & 0xFFFFFFFFFFF00000) \
+                                        | ((((uint64_t)i) << 4) & 0x00000000000FFFFF))
+#define meta_get_block(a, i)        (((uint8_t*)a)[(i) >> 3] \
+                                        &   (1 << (7 - ((i) & 0x07))))
+#define meta_set_block(a, i)        (((uint8_t*)a)[(i) >> 3] \
+                                        |=  (1 << (7 - ((i) & 0x07))))
+#define meta_clear_block(a, i)      (((uint8_t*)a)[(i) >> 3] \
+                                        &= ~(1 << (7 - ((i) & 0x07))))
+#define meta_get_mark(a, i)         (((uint8_t*)a)[BITMAP_SIZE + ((i) >> 3)] \
+                                        &   (1 << (7 - ((i) & 0x07))))
+#define meta_set_mark(a, i)         (((uint8_t*)a)[BITMAP_SIZE + ((i) >> 3)] \
+                                        |=  (1 << (7 - ((i) & 0x07))))
+#define meta_clear_mark(a, i)       (((uint8_t*)a)[BITMAP_SIZE + ((i) >> 3)] \
+                                        &= ~(1 << (7 - ((i) & 0x07))))
 
 #define ARENA_TYPE_NURSERY          0
-#define ARENA_TYPE_OLD_SURVIVOR     1
-#define ARENA_TYPE_NEW_SURVIVOR     2
+#define ARENA_TYPE_NEW_SURVIVOR     1
+#define ARENA_TYPE_OLD_SURVIVOR     2
 #define ARENA_TYPE_TENURED          3
 
 struct allocator {
@@ -38,6 +43,7 @@ struct allocator {
     arena arenas_free_list;
     int pressure;
     bool gc_requested;
+    bool gc_requested_full;
 };
 
 struct arena_header {
@@ -74,7 +80,6 @@ void dump_arena_meta(arena a) {
     hexdump(cp+128+8192, 32);
 }
 
-// XXX with nursery we need some sort of arena freelist
 arena alloc_arena(struct allocator *a, uint8_t type) {
     if (!a->arenas_free_list) {
         void *temp = NULL;
@@ -96,7 +101,6 @@ arena alloc_arena(struct allocator *a, uint8_t type) {
     ah->arena_type = type;
     ah->scan_cache = 1024; // first actual cell
 
-    //printf("new arena at %p\n", ret);
     return ret;
 }
 
@@ -221,10 +225,6 @@ block alloc_block_tenured(arena a, int s) {
     return ret;
 }
 
-void free_cell(cell c) {
-    // XXX are we not doing GC?
-}
-
 struct allocator* allocator_new(void) {
     struct allocator *ret = malloc(sizeof(struct allocator));
     ret->arenas_free_list = NULL;
@@ -280,7 +280,6 @@ void dump_clear_alloc_stats(void) {
 }
 
 cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
-    // XXX a different way to assess pressure...
     a->pressure++;
 
     if (type == ARENA_TYPE_TENURED) {
@@ -342,7 +341,6 @@ cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
             else {
                 assert(((uint64_t)ret & 15) == 0);
                 assert(cell_to_arena(ret) == current_arena);
-            //    printf("# allocation in nursery at 0x%016X\n", ret);
                 return ret;
             }
         } while (1);
@@ -363,8 +361,9 @@ bool allocator_needs_gc(struct allocator *a) {
     return (a->pressure > arg_gc_threshold) || a->gc_requested;
 }
 
-void allocator_request_gc(struct allocator *a) {
+void allocator_request_gc(struct allocator *a, bool full) {
     a->gc_requested = true;
+    a->gc_requested_full = full;
 }
 
 // XXX use posix_memalign for this, and assert it has the right size.
@@ -411,8 +410,6 @@ void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m) {
     struct arena_header *ah = a;
     assert(ah->arena_type == ARENA_TYPE_TENURED);
     meta_set_mark(a, cell_idx);
-    // XXX it is very unfortunate that non-vals are currently always allocated
-    // in tenured, this needs fixing
 }
 
 // for an area type that an item is coming from, figure out where to promote it
@@ -444,12 +441,13 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 
     gc->a->pressure = 0;
     gc->a->gc_requested = false;
+    gc->a->gc_requested_full = false;
 
 //    int roots = gc->list->count;
     int visited = 0;
     int reclaimed = 0;
 
-    // XXX turn all existing survivor arenas into ARENA_TYPE_OLD_SURVIVOR
+    // turn all existing survivor arenas into ARENA_TYPE_OLD_SURVIVOR
     arena a = gc->a->first_survivor;
     while (a) {
         struct arena_header *ah = a;
@@ -618,15 +616,11 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         // reset scan_cache, we can just set this as it is only a lower bound
         ah->scan_cache = 1024;
         a = ah->next;
-        // XXX faster unmark: flip a bit in the allocator and check for equals that in
-        // get_mark/set_mark. new arenas need to be created with that bit set
-        // correctly!
     }
 
     // also unmark the survivor pages
     a = gc->a->first_survivor;
     while (a) {
-        // XXX this is even easier to clear because we never allocate to this again
         for (int i = 1024; i < 65535; i++) {
             if (meta_get_block(a, i) && meta_get_mark(a, i)) {
                 meta_clear_mark(a, i);
@@ -636,7 +630,6 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         a = ah->next;
     }
 
-    // XXX some sort of free list
     while (gc->a->first_nursery) {
         arena temp = ((struct arena_header*)gc->a->first_nursery)->next;
         recycle_arena(gc->a, gc->a->first_nursery);

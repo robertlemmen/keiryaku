@@ -5,6 +5,8 @@
 // XXX just for dump_value below, which needs to move to ports
 #include <stdio.h>
 
+// XXX double-check this documentation with the actual values ettc below, seems
+// out of sync!
 /* Value Representation
  *
  * values are represented as 64-bit, using tagging in the low order bits. This is
@@ -69,6 +71,8 @@
  *   01 - parameter
  *
  * XXX will need boxes? they could be two-bit tagged immediates...
+ * we could use them also to avoid nonmoving allocations and the "other"
+ * non-immediates, which would be cool
  *  */
 
 // XXX we have to make sure that we never have CONS entries that are empty,
@@ -88,7 +92,7 @@ typedef uint64_t value;
 
 #define value_is_immediate(x) (!((x) & 1))
 #define value_to_cell(x) (void*)((x) & ~15) // XXX should be called block?
-#define value_type(x) ((x) & 15) // XXX we need a subtype call too
+#define value_type(x) ((x) & 15)
 #define value_subtype(x) (*(uint8_t*)(value_to_cell(x)))
 
 #define TYPE_ENUM             0b0000
@@ -133,9 +137,6 @@ typedef uint64_t value;
 
 #define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 
-// XXX we do not need this anymore, clean up
-#define value_is_true(x) ((x) != VALUE_FALSE)
-
 #define intval(x) ((int32_t)((x) >> 32))
 #define make_int(a, x) (((uint64_t)(x) << 32) | TYPE_INT)
 // XXX float are broken, need reinterpret_cast style casting
@@ -158,7 +159,7 @@ value make_cons(struct allocator *a, value car, value cdr);
 #define car(x) (((struct cons*)value_to_cell(x))->car)
 #define cdr(x) (((struct cons*)value_to_cell(x))->cdr)
 
-// retunr pointers to, this is required by GC to update for moved items
+// return pointers to, this is required by GC to update for moved items
 #define carptr(x) (&((struct cons*)value_to_cell(x))->car)
 #define cdrptr(x) (&((struct cons*)value_to_cell(x))->cdr)
 
@@ -195,7 +196,6 @@ char* value_to_string(value *s);
  * every time they are evaluated, they are only evaluated once and then replaced
  * with a vector of two numbers: how many environments to move up, and how many
  * entries into that environment. */
-
 value make_lookup_vector(struct allocator *a, uint16_t envs, uint16_t entries);
 uint16_t lookup_vector_envs(value l);
 uint16_t lookup_vector_entries(value l);

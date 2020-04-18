@@ -152,7 +152,7 @@ value builtin_eq(struct allocator *alloc, value a, value b) {
 }
 
 value builtin_eqv(struct allocator *alloc, value a, value b) {
-    if (builtin_eq(alloc, a, b) == VALUE_TRUE) {
+    if (builtin_eq(alloc, a, b) != VALUE_FALSE) {
         return VALUE_TRUE;
     }
     if (value_is_string(a) && value_is_string(b)) {
@@ -166,7 +166,7 @@ value builtin_eqv(struct allocator *alloc, value a, value b) {
 // XXX equal? needs to support cyclic structures
 value builtin_equal(struct allocator *alloc, value a, value b) {
 tailcall_label:
-    if (builtin_eqv(alloc, a, b) == VALUE_TRUE) {
+    if (builtin_eqv(alloc, a, b) != VALUE_FALSE) {
         return VALUE_TRUE;
     }
     if ((value_type(a) == TYPE_CONS) && (value_type(b) == TYPE_CONS)) {
@@ -389,8 +389,8 @@ value builtin_compile_stub(struct allocator *alloc, value v) {
     return v;
 }
 
-value builtin_request_gc(struct allocator *alloc) {
-    allocator_request_gc(alloc);
+value builtin_request_gc(struct allocator *alloc, value full) {
+    allocator_request_gc(alloc, full != VALUE_FALSE);
     return VALUE_NIL;
 }
 
@@ -469,7 +469,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_procedure, "procedure?"));
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_make_parameter, "_make-parameter"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_compile_stub, "_compile"));
-    bind_builtin_helper(alloc, env, make_builtin0(alloc, &builtin_request_gc, "_request_gc"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_request_gc, "_request_gc"));
     // XXX probably should not be a built-in, but enables a good test case for
     // named let
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_quotient, "truncate-quotient"));
