@@ -44,7 +44,6 @@ char* value_to_symbol(value *s) {
     }
 }
 
-/* XXX same as above, refactor */
 value make_string(struct allocator *a, char *s) {
     if (strlen(s) < 7) {
         value ret = 0;

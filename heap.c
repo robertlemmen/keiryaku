@@ -562,6 +562,9 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                                 // question is always traversed from somewhere else
                                 // XXX really?
                                 break;
+                            case SUBTYPE_ENV_ENTRY:
+                                interp_traverse_env_entry(gc, value_to_cell(cv));
+                                break;
                             case SUBTYPE_PORT:
                                 // XXX should probably take a reak port, not a
                                 // value as second arg

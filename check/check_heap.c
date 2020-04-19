@@ -16,6 +16,9 @@ struct interp_lambda {
 void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
 }
 
+void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_entry *ee) {
+}
+
 void traverse_port(struct allocator_gc_ctx *gc, value p) {
 }
 

@@ -16,14 +16,15 @@
 // lookup would be O(log(n)) with a binary chop. most envs do have few (but
 // more than one) entries, the top a few hundred.
 struct interp_env_entry {
+    uint8_t sub_type;
     value name;
     value value;
-    struct interp_env_entry *next;
+    value next_entry_v;
 };
 
 struct interp_env {
     struct interp_env *outer;
-    struct interp_env_entry *entries;
+    value first_entry_v;
 };
 
 struct interp {
@@ -44,10 +45,13 @@ struct interp_lambda {
 // XXX double-check that everything we ever allocate _nonmoving is added as
 // part of the initial root adding, if it comes from traversal from a younger
 // generation we could miss it
+// XXX we could also check in the nursery by address: the bump allocator will
+// mostly hand out increasing adddresses, so no pointer must go against that
+// direction or we could violate the old/new generation assumption
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
     struct interp_env *ret = allocator_alloc_nonmoving(alloc, (sizeof(struct interp_env)));
     ret->outer = outer;
-    ret->entries = NULL;
+    ret->first_entry_v = VALUE_NIL;
     return ret;
 }
 
@@ -55,9 +59,10 @@ value env_lookup(struct interp_env *env, value symbol, value *lookup_vector) {
     assert(value_is_symbol(symbol));
     int envs = 0;
     while (env) {
-        struct interp_env_entry *ee = env->entries;
-        int entries = 0;
-        while (ee) {
+        value ee_v = env->first_entry_v;
+        int entries = 0;    // XXX rename, also in vector lookup, so that it is clear that this  is the number of entries, not the field in the struct
+        while (ee_v != VALUE_NIL) {
+            struct interp_env_entry *ee = value_to_env_entry(ee_v);
             if (!value_is_symbol(ee->name)) {
                 assert(value_is_symbol(ee->name));
             }
@@ -79,7 +84,7 @@ value env_lookup(struct interp_env *env, value symbol, value *lookup_vector) {
                 }
                 return ee->value;
             }
-            ee = ee->next;
+            ee_v = ee->next_entry_v;
             entries++;
         }
         env = env->outer;
@@ -96,52 +101,56 @@ value env_lookup_vector(struct interp_env *env, value vector) {
         envs--;
         env = env->outer;
     }
-    struct interp_env_entry *ee = env->entries;
+    value ee_v = env->first_entry_v;
     while (entries) {
         entries--;
-        ee = ee->next;
+        ee_v = value_to_env_entry(ee_v)->next_entry_v;
     }
-    return ee->value;
+    return value_to_env_entry(ee_v)->value;
 }
 
-void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
+void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, value val) {
     assert(value_is_symbol(symbol));
-    struct interp_env_entry *ee = env->entries;
     struct interp_env_entry *prev = NULL;
+    value ee_v = env->first_entry_v;
 
-    while (ee) {
+    while (ee_v != VALUE_NIL) {
+        struct interp_env_entry *ee = value_to_env_entry(ee_v);
         assert(value_is_symbol(ee->name));
         if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
-            ee->value = value;
+            ee->value = val;
             return;
         }
         prev = ee;
-        ee = ee->next;
+        ee_v = ee->next_entry_v;
     }
-    struct interp_env_entry *nee = allocator_alloc_nonmoving(alloc, (sizeof(struct interp_env_entry)));
-    nee->next = NULL;
+    struct interp_env_entry *nee = allocator_alloc(alloc, (sizeof(struct interp_env_entry)));
+    nee->sub_type = SUBTYPE_ENV_ENTRY;
+    nee->next_entry_v = VALUE_NIL;
     nee->name = symbol;
-    nee->value = value;
+    nee->value = val;
     if (prev) {
-        prev->next = nee;
+        prev->next_entry_v = make_env_entry(alloc, nee);
     }
     else {
-        env->entries = nee;
+        env->first_entry_v = make_env_entry(alloc, nee);
     }
 }
 
-bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, value value) {
+// XXX doesn't this need a short symbol case?
+bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, value val) {
     assert(value_is_symbol(symbol));
 
     while (env) {
-        struct interp_env_entry *ee = env->entries;
-        while (ee) {
+        value ee_v = env->first_entry_v;
+        while (ee_v != VALUE_NIL) {
+            struct interp_env_entry *ee = value_to_env_entry(ee_v);
             assert(value_is_symbol(ee->name));
             if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
-                ee->value = value;
+                ee->value = val;
                 return true;
             }
-            ee = ee->next;
+            ee_v = ee->next_entry_v;
         }
         env = env->outer;
     }
@@ -152,6 +161,8 @@ struct interp* interp_new(struct allocator *alloc) {
     struct interp *ret = malloc(sizeof(struct interp));
     ret->alloc = alloc;
     ret->top_env = env_new(ret->alloc, NULL);
+    ret->current_frame = NULL;
+    ret->current_dynamic_frame = NULL;
 
     bind_builtins(alloc, ret->top_env);
 
@@ -763,13 +774,7 @@ value interp_eval(struct interp *i, value expr) {
 void interp_add_gc_root_env(struct allocator_gc_ctx *gc, struct interp_env *env) {
     while (env) {
         allocator_gc_add_nonval_root(gc, env);
-        struct interp_env_entry *ee = env->entries;
-        while (ee) {
-            allocator_gc_add_nonval_root(gc, ee);
-            allocator_gc_add_root_fp(gc, &ee->name);
-            allocator_gc_add_root_fp(gc, &ee->value);
-            ee = ee->next;
-        }
+        allocator_gc_add_root_fp(gc, &env->first_entry_v);
         env = env->outer;
     }
 }
@@ -797,6 +802,20 @@ void interp_add_gc_dynamic_chain(struct allocator_gc_ctx *gc, struct dynamic_fra
     }
 }
 
+void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
+    allocator_gc_add_root_fp(gc, &l->body);
+    allocator_gc_add_nonval_root(gc, l->arg_names);
+    for (int i = 0; i < l->arity; i++) {
+        allocator_gc_add_root_fp(gc, &l->arg_names[i]);
+    }
+    interp_add_gc_root_env(gc, l->env);
+}
+
+void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_entry *ee) {
+    allocator_gc_add_root_fp(gc, &ee->name);
+    allocator_gc_add_root_fp(gc, &ee->value);
+    allocator_gc_add_root_fp(gc, &ee->next_entry_v);
+}
 
 void interp_gc(struct interp *i) {
     struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
@@ -804,24 +823,4 @@ void interp_gc(struct interp *i) {
     interp_add_gc_root_frame(gc, i->current_frame);
     interp_add_gc_dynamic_chain(gc, i->current_dynamic_frame);
     allocator_gc_perform(gc);
-}
-
-void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
-    allocator_gc_add_root_fp(gc, &l->body);
-    allocator_gc_add_nonval_root(gc, l->arg_names);
-    for (int i = 0; i < l->arity; i++) {
-        allocator_gc_add_root_fp(gc, &l->arg_names[i]);
-    }
-    struct interp_env *ce = l->env;
-    while (ce) {
-        allocator_gc_add_nonval_root(gc, ce);
-        struct interp_env_entry *ee = ce->entries;
-        while (ee) {
-            allocator_gc_add_nonval_root(gc, ee);
-            allocator_gc_add_root_fp(gc, &ee->name);
-            allocator_gc_add_root_fp(gc, &ee->value);
-            ee = ee->next;
-        }
-        ce = ce->outer;
-    }
 }
