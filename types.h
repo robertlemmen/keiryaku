@@ -61,16 +61,15 @@
  *   100_ - interpreter lambda
  *   101_ - vector
  *   110_ - port
- *   111_ - other
+ *   111_ - boxed / other
  *
- * in the case of "other" non-immediates, the sub-type is stored on the heap as
+ * in the case of "boxed" non-immediates, the sub-type is stored on the heap as
  * well, in the first 8 bits. currently supported:
- *   00 - environment
- *   01 - parameter
+ *   000 - environment
+ *   001 - parameter
+ *   010 - port
+ *   011 - environment entry
  *
- * XXX will need boxes? they could be two-bit tagged immediates...
- * we could use them also to avoid nonmoving allocations and the "other"
- * non-immediates, which would be cool
  *  */
 
 // XXX we have to make sure that we never have CONS entries that are empty,
@@ -103,11 +102,14 @@ typedef uint64_t value;
 #define TYPE_BUILTIN          0b0111
 #define TYPE_INTERP_LAMBDA    0b1001
 #define TYPE_VECTOR           0b1011
-#define TYPE_PORT             0b1101
-#define TYPE_OTHER            0b1111
+// unused                     0b1101
+#define TYPE_BOXED            0b1111
 
-#define SUBTYPE_ENV             0b00
-#define SUBTYPE_PARAM           0b01
+// XXX rename to BOXTYPE_ ?
+#define SUBTYPE_ENV            0b000
+#define SUBTYPE_PARAM          0b001
+#define SUBTYPE_PORT           0b010
+#define SUBTYPE_ENV_ENTRY      0b011
 
 #define VALUE_NIL         0b00000000
 #define VALUE_TRUE        0b00100000
@@ -130,11 +132,12 @@ typedef uint64_t value;
 
 #define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 
-#define intval(x) ((int32_t)((x) >> 32))
-#define make_int(a, x) (((uint64_t)(x) << 32) | TYPE_INT)
+#define intval(x)           ((int32_t)((x) >> 32))
+#define make_int(a, x)      (((uint64_t)(x) << 32) | TYPE_INT)
+
 // XXX float are broken, need reinterpret_cast style casting
-#define floatval(x) ((float)((x) >> 32))
-#define make_float(a, x) (((uint64_t)(x) << 32) | TYPE_FLOAT)
+#define floatval(x)         ((float)((x) >> 32))
+#define make_float(a, x)    (((uint64_t)(x) << 32) | TYPE_FLOAT)
 
 /* Cons cells
  *
@@ -247,9 +250,19 @@ void dump_string_value(value v, FILE *f);
 
 /* Environment references
  * */
+#define value_is_env(x) (   (value_type(x) == TYPE_BOXED) \
+                         && (value_subtype(x) == SUBTYPE_ENV))
+
 struct interp_env;
 value make_environment(struct allocator *a, struct interp_env *env);
 struct interp_env* value_to_environment(value v);
+
+#define value_is_env_entry(x) (   (value_type(x) == TYPE_BOXED) \
+                               && (value_subtype(x) == SUBTYPE_ENV_ENTRY))
+
+struct interp_env_entry;
+value make_env_entry(struct allocator *a, struct interp_env_entry *entry);
+struct interp_env_entry* value_to_env_entry(value v);
 
 /* Dynamic Bindings
  * */
@@ -257,6 +270,8 @@ struct param {
     value init;
     value convert;
 };
+
+#define value_is_param(x) ((value_type(x) == TYPE_BOXED) && (value_subtype(x) == SUBTYPE_PARAM))
 
 value make_parameter(struct allocator *a, value init, value convert);
 struct param* value_to_parameter(value v);

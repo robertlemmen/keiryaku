@@ -312,23 +312,28 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v) {
     }
 }
 
-struct env_box {
-    uint8_t sub_type;
-    struct interp_env *env;
-};
-
 value make_environment(struct allocator *a, struct interp_env *env) {
-    struct env_box *ret = allocator_alloc(a, sizeof(struct env_box));
-    ret->sub_type = SUBTYPE_ENV;
-    ret->env = env;
-    return (uint64_t)ret | TYPE_OTHER;
+    assert(*(uint8_t*)env == SUBTYPE_ENV); // XXX we should have a reusable define for this
+    return (uint64_t)env | TYPE_BOXED;
 }
 
 struct interp_env* value_to_environment(value v) {
-    assert(value_type(v) == TYPE_OTHER);
-    struct env_box *box = (struct env_box*)value_to_cell(v);
-    assert(box->sub_type == SUBTYPE_ENV);
-    return box->env;
+    assert(value_type(v) == TYPE_BOXED);
+    struct interp_env *ret = value_to_cell(v);
+    assert(*(uint8_t*)ret == SUBTYPE_ENV);
+    return ret;
+}
+
+value make_env_entry(struct allocator *a, struct interp_env_entry *entry) {
+    assert(*(uint8_t*)entry == SUBTYPE_ENV_ENTRY);
+    return (uint64_t)entry | TYPE_BOXED;
+}
+
+struct interp_env_entry* value_to_env_entry(value v) {
+    assert(value_type(v) == TYPE_BOXED);
+    struct interp_env_entry *ret = value_to_cell(v);
+    assert(*(uint8_t*)ret == SUBTYPE_ENV_ENTRY);
+    return ret;
 }
 
 struct param_box {
@@ -341,11 +346,11 @@ value make_parameter(struct allocator *a, value init, value convert) {
     ret->sub_type = SUBTYPE_PARAM;
     ret->param.init = init;
     ret->param.convert = convert;
-    return (uint64_t)ret | TYPE_OTHER;
+    return (uint64_t)ret | TYPE_BOXED;
 }
 
 struct param* value_to_parameter(value v) {
-    assert(value_type(v) == TYPE_OTHER);
+    assert(value_type(v) == TYPE_BOXED);
     struct param_box *box = (struct param_box*)value_to_cell(v);
     assert(box->sub_type == SUBTYPE_PARAM);
     return &box->param;

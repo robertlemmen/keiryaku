@@ -314,33 +314,23 @@ tailcall_label:
 }
 
 value builtin_port(struct allocator *alloc, value v) {
-    return (value_type(v) == TYPE_PORT)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return value_is_port(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_input_port(struct allocator *alloc, value v) {
-    return port_in(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_in(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_output_port(struct allocator *alloc, value v) {
-    return port_out(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_out(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_text_port(struct allocator *alloc, value v) {
-    return port_text(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_text(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_binary_port(struct allocator *alloc, value v) {
-    return port_binary(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_binary(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_write(struct allocator *alloc, value o, value p) {
@@ -367,9 +357,7 @@ value builtin_read(struct allocator *alloc, value p) {
 }
 
 value builtin_end_of_file(struct allocator *alloc, value v) {
-    return v == VALUE_EOF
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return v == VALUE_EOF ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_mk_end_of_file(struct allocator *alloc) {
@@ -379,7 +367,7 @@ value builtin_mk_end_of_file(struct allocator *alloc) {
 value builtin_procedure(struct allocator *alloc, value v) {
     return ( (value_type(v) == TYPE_INTERP_LAMBDA)
              || (value_type(v) == TYPE_BUILTIN)
-             || (value_type(v) == TYPE_OTHER && value_subtype(v) == SUBTYPE_PARAM) )
+             || value_is_param(v) )
         ? VALUE_TRUE
         : VALUE_FALSE;
 }

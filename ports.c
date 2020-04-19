@@ -23,16 +23,14 @@ struct result_list_entry {
 char *history_file = NULL;
 
 struct port {
-    FILE *file;
+    uint8_t sub_type;
     bool in:1;
     bool out:1;
     bool text:1;
     bool binary:1;
     bool tty:1;
     int buf_pos;
-    // XXX we only need a buffer and parser when we use (read ...) on this port,
-    // not for e.g. text files. so this could be lazily allocated when needed
-    char buffer[BUFSIZE];
+    FILE *file;
     struct parser *p;
     /* we need to store the results from buffers pushed into the parser. most of
      * the time that is 0 or 1 expression, but it can be multiple. we do not
@@ -41,6 +39,9 @@ struct port {
     value result;
     struct result_list_entry *result_overflow_oldest;
     struct result_list_entry *result_overflow_youngest;
+    // XXX we only need a buffer and parser when we use (read ...) on this port,
+    // not for e.g. text files. so this could be lazily allocated when needed
+    char buffer[BUFSIZE];
 };
 
 static void parser_callback(value expr, void *arg) {
@@ -64,29 +65,31 @@ static void parser_callback(value expr, void *arg) {
 
 value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bool binary) {
     struct port *ps = allocator_alloc_nonmoving(a, sizeof(struct port));
-    ps->file = file;
+    ps->sub_type = SUBTYPE_PORT;
     ps->tty = false;
     ps->in = in;
     ps->out = out;
     ps->text = text;
     ps->binary = binary;
     ps->buf_pos = 0;
+    ps->file = file;
     ps->p = parser_new(a, &parser_callback, ps);
     ps->result = VALUE_NIL;
     ps->result_overflow_youngest = NULL;
     ps->result_overflow_oldest = NULL;
-    return (uint64_t)ps | TYPE_PORT;
+    return (uint64_t)ps | TYPE_BOXED;
 }
 
 value port_new_tty(struct allocator *a) {
     struct port *ps = allocator_alloc_nonmoving(a, sizeof(struct port));
-    ps->file = NULL;
+    ps->sub_type = SUBTYPE_PORT;
     ps->tty = true;
     ps->in = true;
     ps->text = true;
     ps->out = false;
     ps->binary = false;
     ps->buf_pos = 0;
+    ps->file = NULL;
     ps->p = parser_new(a, &parser_callback, ps);
     ps->result = VALUE_NIL;
     ps->result_overflow_youngest = NULL;
@@ -102,11 +105,11 @@ value port_new_tty(struct allocator *a) {
     sprintf(history_file, "%s/.keiryaku_history", homedir);
     linenoiseHistoryLoad(history_file);
 
-    return (uint64_t)ps | TYPE_PORT;
+    return (uint64_t)ps | TYPE_BOXED;
 }
 
 bool port_in(value p) {
-    if (value_type(p) != TYPE_PORT) {
+    if (!value_is_port(p)) {
         return VALUE_FALSE;
     }
     struct port *ps = (struct port*)value_to_cell(p);
@@ -114,7 +117,7 @@ bool port_in(value p) {
 }
 
 bool port_out(value p) {
-    if (value_type(p) != TYPE_PORT) {
+    if (!value_is_port(p)) {
         return VALUE_FALSE;
     }
     struct port *ps = (struct port*)value_to_cell(p);
@@ -122,7 +125,7 @@ bool port_out(value p) {
 }
 
 bool port_text(value p) {
-    if (value_type(p) != TYPE_PORT) {
+    if (!value_is_port(p)) {
         return VALUE_FALSE;
     }
     struct port *ps = (struct port*)value_to_cell(p);
@@ -130,7 +133,7 @@ bool port_text(value p) {
 }
 
 bool port_binary(value p) {
-    if (value_type(p) != TYPE_PORT) {
+    if (!value_is_port(p)) {
         return VALUE_FALSE;
     }
     struct port *ps = (struct port*)value_to_cell(p);
@@ -138,7 +141,7 @@ bool port_binary(value p) {
 }
 
 void port_newline(value p) {
-    assert(value_type(p) == TYPE_PORT);
+    assert(value_is_port(p));
     struct port *ps = (struct port*)value_to_cell(p);
     if (!ps->out) {
         fprintf(stderr, "Trying to write to non output port\n");
@@ -149,7 +152,7 @@ void port_newline(value p) {
 }
 
 void port_write(value p, value o) {
-    assert(value_type(p) == TYPE_PORT);
+    assert(value_is_port(p));
     struct port *ps = (struct port*)value_to_cell(p);
     if (!ps->out) {
         fprintf(stderr, "Trying to write to non output port\n");
@@ -160,7 +163,7 @@ void port_write(value p, value o) {
 }
 
 void port_write_string(value p, value o) {
-    assert(value_type(p) == TYPE_PORT);
+    assert(value_is_port(p));
     struct port *ps = (struct port*)value_to_cell(p);
     if (!ps->out) {
         fprintf(stderr, "Trying to write to non output port\n");
@@ -183,7 +186,7 @@ value port_open_input_file(struct allocator *a, value filename) {
 }
 
 void port_close(value p) {
-    assert(value_type(p) == TYPE_PORT);
+    assert(value_is_port(p));
     struct port *ps = (struct port*)value_to_cell(p);
     if (fclose(ps->file)) {
         fprintf(stderr, "Could not close: %s", strerror(errno));
@@ -192,7 +195,7 @@ void port_close(value p) {
 }
 
 value port_read(value p) {
-    assert(value_type(p) == TYPE_PORT);
+    assert(value_is_port(p));
     struct port *ps = (struct port*)value_to_cell(p);
     while (ps->result == VALUE_NIL) {
         if (ps->tty) {
@@ -244,7 +247,7 @@ value port_read(value p) {
 }
 
 void traverse_port(struct allocator_gc_ctx *gc, value p) {
-    assert(value_type(p) == TYPE_PORT);
+    assert(value_is_port(p));
     struct port *ps = (struct port*)value_to_cell(p);
     allocator_gc_add_root_fp(gc, &ps->result);
     struct result_list_entry *rle = ps->result_overflow_oldest;

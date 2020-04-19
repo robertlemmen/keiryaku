@@ -232,6 +232,7 @@ struct allocator* allocator_new(void) {
     ret->first_survivor = alloc_arena(ret, ARENA_TYPE_NEW_SURVIVOR);
     ret->first_tenured = alloc_arena(ret, ARENA_TYPE_TENURED);
     ret->pressure = 0;
+    ret->gc_requested = false;
     return ret;
 }
 
@@ -554,16 +555,18 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                     case TYPE_VECTOR:
                         traverse_vector(gc, cv);
                         break;
-                    case TYPE_PORT:
-                        traverse_port(gc, cv);
-                        break;
-                    case TYPE_OTHER:
+                    case TYPE_BOXED:
                         switch (value_subtype(cv)) {
                             case SUBTYPE_ENV:;
-                            // this could be traversed, but the environment in
-                            // question is always traversed from somewhere else
-                            // XXX really?
-                            break;
+                                // this could be traversed, but the environment in
+                                // question is always traversed from somewhere else
+                                // XXX really?
+                                break;
+                            case SUBTYPE_PORT:
+                                // XXX should probably take a reak port, not a
+                                // value as second arg
+                                traverse_port(gc, cv);
+                                break;
                             case SUBTYPE_PARAM:;
                                 struct param *cp = value_to_parameter(cv);
                                 allocator_gc_add_root_fp(gc, &(cp->init)); 

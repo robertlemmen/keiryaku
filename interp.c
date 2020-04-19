@@ -585,8 +585,7 @@ tailcall_label:
                             // XXX we should use spare locals for this!
                             new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[NUM_LOCALS-2])), f->env, VALUE_NIL);
                             new_dyn_frame->param = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-2]), f->env, VALUE_NIL);
-                            if (       (value_type(new_dyn_frame->param) != TYPE_OTHER)
-                                    || (value_subtype(new_dyn_frame->param) != SUBTYPE_PARAM) ) {
+                            if (!value_is_param(new_dyn_frame->param)) {
                                 fprintf(stderr, "Binding to parameterize is not for parameter\n");
                                 return VALUE_NIL;
                             }
@@ -729,7 +728,7 @@ apply_eval_label:
                     f->extra_env = NULL;
                     goto tailcall_label;
                 }
-                else if (value_type(op) == TYPE_OTHER && value_subtype(op) == SUBTYPE_PARAM) {
+                else if (value_is_param(op)) {
                     struct param *p = value_to_parameter(op);
                     struct dynamic_frame *dyn_frame_iter = dyn_frame;
                     while (dyn_frame_iter) {
