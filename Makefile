@@ -27,22 +27,25 @@ test: $(TARGET)
 	@$(MAKE) --no-print-directory -C check
 	@echo
 	@echo "Running Contract Tests..."
-	@failed_count=0; \
+	@tdir=`mktemp -d`; \
+	echo "results in $$tdir"; \
+	failed_count=0; \
 	for tf in $$(find t -name "*.t" | sort); do \
 		[ -e "$$tf" ] || continue; \
 		echo "  $$tf ..."; \
-		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) --debug > /tmp/result; \
-		cat $$tf | grep -v "^;" | sed '1,/===/d' > /tmp/expected; \
-		diff -uB /tmp/expected /tmp/result > /tmp/diff || true; \
-		if [ -s /tmp/diff ]; then \
+		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) --debug > $$tdir/result; \
+		cat $$tf | grep -v "^;" | sed '1,/===/d' > $$tdir/expected; \
+		diff -uB $$tdir/expected /$$tdir/result > $$tdir/diff || true; \
+		if [ -s $$tdir/diff ]; then \
 			echo; \
 			echo "difference in test $$tf:"; \
-			cat /tmp/diff; \
+			cat $$tdir/diff; \
 			echo; \
-			rm -f /tmp/expected /tmp/result /tmp/diff; \
 			failed_count=`expr $$failed_count + 1`; \
 		fi; \
+		rm -f $$tdir/expected $$tdir/result $$tdir/diff; \
 	done; \
+	rm -rf $$tdir; \
 	if [ $$failed_count -gt 0 ]; then \
 		echo; \
 		echo "$$failed_count tests failed!"; \
