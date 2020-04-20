@@ -38,9 +38,10 @@ struct interp {
 struct interp_lambda {
     uint_fast32_t arity : 31;
     uint_fast32_t variadic : 1;
-    value *arg_names;   // XXX make this an inline array, one less heap allocation
     value body;
     value env_v;            // always a interp_env
+    value arg_names[];      // inline array, struct needs to be allocated with 
+                            // correct size 
 };
 
 // XXX we could also check in the nursery by address: the bump allocator will
@@ -403,25 +404,28 @@ tailcall_label:
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_LAMBDA:;
-                        struct interp_lambda *lambda = allocator_alloc_nonmoving(i->alloc, sizeof(struct interp_lambda));
-                        lambda->env_v = f->env_v;
                         arg_count = interp_collect_list(args, 2, &f->locals[1]);
+                        struct interp_lambda *lambda;
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'lambda': expected 2 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
                         if (value_type(car(args)) != TYPE_CONS) {
+                            lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda) + sizeof(value) * 1);
                             lambda->variadic = 1;
                             lambda->arity = 1;
-                            lambda->arg_names = allocator_alloc_nonmoving(i->alloc, sizeof(value) * lambda->arity);
+                            lambda->env_v = f->env_v;
                             lambda->arg_names[0] = car(args);
                         }
                         else {
                             bool well_formed;
-                            lambda->arity = interp_count_nonlist(f->locals[1], &well_formed);
+                            int arity = interp_count_nonlist(f->locals[1], &well_formed);
+
+                            lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda) + sizeof(value) * arity);
+                            lambda->arity = arity;
                             lambda->variadic = well_formed ? 0 : 1;
-                            lambda->arg_names = allocator_alloc_nonmoving(i->alloc, sizeof(value) * lambda->arity);
+                            lambda->env_v = f->env_v;
                             interp_collect_nonlist(f->locals[1], lambda->arity, lambda->arg_names);
                         }
                         lambda->body = f->locals[2];
@@ -809,11 +813,10 @@ void interp_add_gc_dynamic_chain(struct allocator_gc_ctx *gc, struct dynamic_fra
 
 void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
     allocator_gc_add_root_fp(gc, &l->body);
-    allocator_gc_add_nonval_root(gc, l->arg_names);
+    allocator_gc_add_root_fp(gc, &l->env_v);
     for (int i = 0; i < l->arity; i++) {
         allocator_gc_add_root_fp(gc, &l->arg_names[i]);
     }
-    allocator_gc_add_root_fp(gc, &l->env_v);
 }
 
 void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_entry *ee) {
