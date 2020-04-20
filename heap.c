@@ -557,16 +557,14 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                         break;
                     case TYPE_BOXED:
                         switch (value_subtype(cv)) {
-                            case SUBTYPE_ENV:;
-                                // this could be traversed, but the environment in
-                                // question is always traversed from somewhere else
-                                // XXX really?
+                            case SUBTYPE_ENV:
+                                interp_traverse_env(gc, value_to_cell(cv));
                                 break;
                             case SUBTYPE_ENV_ENTRY:
                                 interp_traverse_env_entry(gc, value_to_cell(cv));
                                 break;
                             case SUBTYPE_PORT:
-                                // XXX should probably take a reak port, not a
+                                // XXX should probably take a real port struct, not a
                                 // value as second arg
                                 traverse_port(gc, cv);
                                 break;

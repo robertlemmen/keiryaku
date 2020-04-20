@@ -19,17 +19,18 @@ struct interp_env_entry {
     uint8_t sub_type;
     value name;
     value value;
-    value next_entry_v;
+    value next_entry_v;     // always a interp_env_entry
 };
 
 struct interp_env {
-    struct interp_env *outer;
-    value first_entry_v;
+    uint8_t sub_type;
+    value outer_v;          // always a interp_env
+    value first_entry_v;    // always a interp_env_entry
 };
 
 struct interp {
     struct allocator *alloc;
-    struct interp_env *top_env;
+    value top_env_v;        // always a interp_env
     struct call_frame *current_frame;
     struct dynamic_frame *current_dynamic_frame;
 };
@@ -37,20 +38,23 @@ struct interp {
 struct interp_lambda {
     uint_fast32_t arity : 31;
     uint_fast32_t variadic : 1;
-    value *arg_names;
+    value *arg_names;   // XXX make this an inline array, one less heap allocation
     value body;
-    struct interp_env *env;
+    value env_v;            // always a interp_env
 };
 
-// XXX double-check that everything we ever allocate _nonmoving is added as
-// part of the initial root adding, if it comes from traversal from a younger
-// generation we could miss it
 // XXX we could also check in the nursery by address: the bump allocator will
 // mostly hand out increasing adddresses, so no pointer must go against that
 // direction or we could violate the old/new generation assumption
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
-    struct interp_env *ret = allocator_alloc_nonmoving(alloc, (sizeof(struct interp_env)));
-    ret->outer = outer;
+    struct interp_env *ret = allocator_alloc(alloc, (sizeof(struct interp_env)));
+    ret->sub_type = SUBTYPE_ENV;
+    if (outer) {
+        ret->outer_v = make_environment(alloc, outer);
+    }
+    else {
+        ret->outer_v = VALUE_NIL;
+    }
     ret->first_entry_v = VALUE_NIL;
     return ret;
 }
@@ -87,7 +91,7 @@ value env_lookup(struct interp_env *env, value symbol, value *lookup_vector) {
             ee_v = ee->next_entry_v;
             entries++;
         }
-        env = env->outer;
+        env = value_to_environment(env->outer_v);
         envs++;
     }
     fprintf(stderr, "Could not find symbol '%s' in environment\n", value_to_symbol(&symbol));
@@ -99,7 +103,7 @@ value env_lookup_vector(struct interp_env *env, value vector) {
     int entries = lookup_vector_entries(vector);
     while (envs) {
         envs--;
-        env = env->outer;
+        env = value_to_environment(env->outer_v);
     }
     value ee_v = env->first_entry_v;
     while (entries) {
@@ -152,44 +156,45 @@ bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, valu
             }
             ee_v = ee->next_entry_v;
         }
-        env = env->outer;
+        env = value_to_environment(env->outer_v);
     }
     return false;
 }
 
 struct interp* interp_new(struct allocator *alloc) {
     struct interp *ret = malloc(sizeof(struct interp));
+    struct interp_env *top_env = env_new(alloc, NULL);
     ret->alloc = alloc;
-    ret->top_env = env_new(ret->alloc, NULL);
+    ret->top_env_v = make_environment(alloc, top_env);
     ret->current_frame = NULL;
     ret->current_dynamic_frame = NULL;
 
-    bind_builtins(alloc, ret->top_env);
+    bind_builtins(alloc, top_env);
 
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "if"),           VALUE_SP_IF);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "define"),       VALUE_SP_DEFINE);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "lambda"),       VALUE_SP_LAMBDA);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "begin"),        VALUE_SP_BEGIN);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "quote"),        VALUE_SP_QUOTE);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let"),          VALUE_SP_LET);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "let*"),         VALUE_SP_LETS);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "letrec"),       VALUE_SP_LETREC);
+    env_bind(alloc, top_env, make_symbol(alloc, "if"),           VALUE_SP_IF);
+    env_bind(alloc, top_env, make_symbol(alloc, "define"),       VALUE_SP_DEFINE);
+    env_bind(alloc, top_env, make_symbol(alloc, "lambda"),       VALUE_SP_LAMBDA);
+    env_bind(alloc, top_env, make_symbol(alloc, "begin"),        VALUE_SP_BEGIN);
+    env_bind(alloc, top_env, make_symbol(alloc, "quote"),        VALUE_SP_QUOTE);
+    env_bind(alloc, top_env, make_symbol(alloc, "let"),          VALUE_SP_LET);
+    env_bind(alloc, top_env, make_symbol(alloc, "let*"),         VALUE_SP_LETS);
+    env_bind(alloc, top_env, make_symbol(alloc, "letrec"),       VALUE_SP_LETREC);
     // our (letrec ...) already behaves like (letrec* ...)
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "letrec*"),      VALUE_SP_LETREC);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "apply"),        VALUE_SP_APPLY);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "set!"),         VALUE_SP_SET);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "eval"),         VALUE_SP_EVAL);
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "parameterize"), VALUE_SP_PARAM);
+    env_bind(alloc, top_env, make_symbol(alloc, "letrec*"),      VALUE_SP_LETREC);
+    env_bind(alloc, top_env, make_symbol(alloc, "apply"),        VALUE_SP_APPLY);
+    env_bind(alloc, top_env, make_symbol(alloc, "set!"),         VALUE_SP_SET);
+    env_bind(alloc, top_env, make_symbol(alloc, "eval"),         VALUE_SP_EVAL);
+    env_bind(alloc, top_env, make_symbol(alloc, "parameterize"), VALUE_SP_PARAM);
 
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "_nil"),         VALUE_NIL);
+    env_bind(alloc, top_env, make_symbol(alloc, "_nil"),         VALUE_NIL);
     // required for (interaction-environment)
-    env_bind(alloc, ret->top_env, make_symbol(ret->alloc, "_top_env"),     make_environment(alloc, ret->top_env));
+    env_bind(alloc, top_env, make_symbol(alloc, "_top_env"),     ret->top_env_v);
 
     return ret;
 }
 
 struct interp_env* interp_top_env(struct interp *i) {
-    return i->top_env;
+    return value_to_environment(i->top_env_v);
 }
 
 void interp_free(struct interp *i) {
@@ -264,9 +269,9 @@ int interp_count_nonlist(value expr, bool *well_formed) {
 
 struct call_frame {
     value expr;                     // expr to be evaluated in this frame
-    struct interp_env *env;         // the env in which to evaluate the expression
+    value env_v;                    // the env in which to evaluate the expression
+    value extra_env_v;              // scratch env used during eval
     value locals[NUM_LOCALS];       // scratch space required to evaluate
-    struct interp_env *extra_env;   // scratch env used during eval
     struct call_frame *outer;       // caller
 };
 
@@ -281,11 +286,11 @@ struct call_frame* call_frame_new(struct allocator *alloc, struct call_frame *ou
         value expr, struct interp_env *env) {
     struct call_frame *ret = alloca(sizeof(struct call_frame));
     ret->expr = expr;
-    ret->env = env;
+    ret->env_v = make_environment(alloc, env);
     for (int i = 0; i < NUM_LOCALS; i++) {
         ret->locals[i] = VALUE_NIL;
     }
-    ret->extra_env = NULL;
+    ret->extra_env_v = VALUE_NIL;
     ret->outer = outer;
     return ret;
 }
@@ -304,7 +309,13 @@ value interp_eval_env(struct interp *i, struct call_frame *caller_frame, struct 
     }
     return ret;
 }
-                        
+
+// XXX we do a lot of coversions between value types and struct interp_env,
+// change the signatures of interp_eval and the env_bind/lookups to avoid this
+// and mostly use values. gets less and less statically typed...
+
+// XXX this does not seem to get inlined, at least I see the frames in gdb.
+// perhaps only because of missing optimisation?
 // XXX what if lookup_cons is poiting to something that gets moved away by GC?
 inline __attribute__((always_inline))
 value interp_eval_env_int(struct interp *i, struct call_frame *f, struct dynamic_frame *dyn_frame, value lookup_cons) {
@@ -331,14 +342,14 @@ tailcall_label:
         case TYPE_SHORT_SYMBOL:
         case TYPE_SYMBOL:;
             value lookup_vector;
-            value ret = env_lookup(f->env, f->expr, &lookup_vector);
+            value ret = env_lookup(value_to_environment(f->env_v), f->expr, &lookup_vector);
             if (lookup_cons != VALUE_NIL) {
                 set_car(lookup_cons, lookup_vector);
             }
             return ret;
             break;
         case TYPE_LOOKUP_VECTOR:
-            return env_lookup_vector(f->env, f->expr);
+            return env_lookup_vector(value_to_environment(f->env_v), f->expr);
             break;
         case TYPE_CONS:;
             int arg_count;
@@ -346,7 +357,7 @@ tailcall_label:
             // symbol, otherwise ((atom-to-function ...) replaces the lookup
             // with the last result
             value cfe = car(f->expr);
-            value op = f->locals[0] = interp_eval_env(i, f, dyn_frame, cfe, f->env, value_is_symbol(cfe) ? f->expr : VALUE_NIL);
+            value op = f->locals[0] = interp_eval_env(i, f, dyn_frame, cfe, value_to_environment(f->env_v), value_is_symbol(cfe) ? f->expr : VALUE_NIL);
             if (op == VALUE_NIL) {
                 // XXX is this right? what if the cdr is set?
                 return VALUE_EMPTY_LIST;
@@ -362,7 +373,7 @@ tailcall_label:
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (interp_eval_env(i, f, dyn_frame, f->locals[1], f->env, VALUE_NIL) != VALUE_FALSE) {
+                        if (interp_eval_env(i, f, dyn_frame, f->locals[1], value_to_environment(f->env_v), VALUE_NIL) != VALUE_FALSE) {
                             f->expr = f->locals[2];
                             goto tailcall_label;
                         }
@@ -386,14 +397,14 @@ tailcall_label:
                                 value_type(f->locals[1]));
                             return VALUE_NIL;
                         }
-                        env_bind(i->alloc, f->env, f->locals[1],
-                            interp_eval_env(i, f, dyn_frame, f->locals[2], f->env, VALUE_NIL));
+                        env_bind(i->alloc, value_to_environment(f->env_v), f->locals[1],
+                            interp_eval_env(i, f, dyn_frame, f->locals[2], value_to_environment(f->env_v), VALUE_NIL));
                         // XXX or what does it return?
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_LAMBDA:;
                         struct interp_lambda *lambda = allocator_alloc_nonmoving(i->alloc, sizeof(struct interp_lambda));
-                        lambda->env = f->env;
+                        lambda->env_v = f->env_v;
                         arg_count = interp_collect_list(args, 2, &f->locals[1]);
                         if (arg_count != 2) {
                             fprintf(stderr, "Arity error in application of special 'lambda': expected 2 args but got %i\n",
@@ -426,7 +437,7 @@ tailcall_label:
                                 goto tailcall_label;
                             }
                             else {
-                                f->locals[1] = interp_eval_env(i, f, dyn_frame, car(f->locals[2]), f->env, VALUE_NIL);
+                                f->locals[1] = interp_eval_env(i, f, dyn_frame, car(f->locals[2]), value_to_environment(f->env_v), VALUE_NIL);
                             }
                             f->locals[2] = f->locals[3];
                         }
@@ -452,13 +463,13 @@ tailcall_label:
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        f->extra_env = env_new(i->alloc, f->env);
+                        f->extra_env_v = make_environment(i->alloc, env_new(i->alloc, value_to_environment(f->env_v)));
                         f->locals[3] = f->locals[1];
                         if (special == VALUE_SP_LETREC) {
                             while (value_type(f->locals[3]) == TYPE_CONS) {
                                 value arg_pair = car(f->locals[3]);
                                 value arg_name = car(arg_pair);
-                                env_bind(i->alloc, f->extra_env, arg_name, VALUE_NIL);
+                                env_bind(i->alloc, value_to_environment(f->extra_env_v), arg_name, VALUE_NIL);
                                 f->locals[3] = cdr(f->locals[3]);
                             }
                         }
@@ -478,18 +489,18 @@ tailcall_label:
                                 return VALUE_NIL;
                             }
                             if (special == VALUE_SP_LET) {
-                                f->locals[5] = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[4])), f->env, VALUE_NIL);
+                                f->locals[5] = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[4])), value_to_environment(f->env_v), VALUE_NIL);
                             }
                             else {
-                                f->locals[5] = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[4])), f->extra_env, VALUE_NIL);
+                                f->locals[5] = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[4])), value_to_environment(f->extra_env_v), VALUE_NIL);
                             }
-                            env_bind(i->alloc, f->extra_env, f->locals[6], f->locals[5]);
+                            env_bind(i->alloc, value_to_environment(f->extra_env_v), f->locals[6], f->locals[5]);
                             f->locals[1] = cdr(f->locals[1]);
                         }
 // XXX clean up?                       f->locals[1] = VALUE_NIL;
                         f->expr = f->locals[2];
-                        f->env = f->extra_env;
-                        f->extra_env = NULL;
+                        f->env_v = f->extra_env_v;
+                        f->extra_env_v = VALUE_NIL;
                         goto tailcall_label;
                         break;
                     case VALUE_SP_APPLY:;
@@ -498,7 +509,7 @@ tailcall_label:
                         f->locals[NUM_LOCALS-1] = args;
                         while (value_type(f->locals[NUM_LOCALS-1]) == TYPE_CONS) {
                             // XXX check overflows, take temporary into acocunt
-                            f->locals[arg_count] = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-1]), f->env, VALUE_NIL);
+                            f->locals[arg_count] = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-1]), value_to_environment(f->env_v), VALUE_NIL);
                             f->locals[NUM_LOCALS-1] = cdr(f->locals[NUM_LOCALS-1]);
                             arg_count++;
                         }
@@ -547,24 +558,25 @@ tailcall_label:
                                 value_type(f->locals[1]));
                             return VALUE_NIL;
                         }
-                        if (!env_set(i->alloc, f->env, f->locals[1], interp_eval_env(i, f, dyn_frame, f->locals[2], f->env, VALUE_NIL))) {
+                        if (!env_set(i->alloc, value_to_environment(f->env_v), f->locals[1], interp_eval_env(i, f, dyn_frame, f->locals[2], value_to_environment(f->env_v), VALUE_NIL))) {
                             fprintf(stderr, "Error in application of special 'set!': binding for symbol '%s' not found\n", value_to_symbol(&f->locals[1]));
                         }
                         return VALUE_NIL;
                         break;
                     case VALUE_SP_EVAL:
                         arg_count = interp_collect_list(args, 2, &f->locals[1]);
-                        struct interp_env *eval_env = f->env;
+                        value eval_env_v = f->env_v; // XXX this needs to be in a local to protect against GC
                         if (arg_count == 2) {
-                            eval_env = value_to_environment(interp_eval_env(i, f, dyn_frame, f->locals[2], f->env, VALUE_NIL));
+                            // XXX what if this does not return an environment?
+                            eval_env_v = interp_eval_env(i, f, dyn_frame, f->locals[2], value_to_environment(f->env_v), VALUE_NIL);
                         }
                         else if (arg_count != 1) {
                             fprintf(stderr, "Arity error in application of special 'eval': expected 1 or 2 args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        f->expr = interp_eval_env(i, f, dyn_frame, f->locals[1], f->env, VALUE_NIL);
-                        f->env = eval_env;
+                        f->expr = interp_eval_env(i, f, dyn_frame, f->locals[1], value_to_environment(f->env_v), VALUE_NIL);
+                        f->env_v = eval_env_v;
                         goto tailcall_label;
                         break;
                     case VALUE_SP_PARAM:
@@ -594,8 +606,8 @@ tailcall_label:
                             // visible during the evaluation. a NIL param
                             // ensures that it is ignored
                             // XXX we should use spare locals for this!
-                            new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[NUM_LOCALS-2])), f->env, VALUE_NIL);
-                            new_dyn_frame->param = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-2]), f->env, VALUE_NIL);
+                            new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, car(cdr(f->locals[NUM_LOCALS-2])), value_to_environment(f->env_v), VALUE_NIL);
+                            new_dyn_frame->param = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-2]), value_to_environment(f->env_v), VALUE_NIL);
                             if (!value_is_param(new_dyn_frame->param)) {
                                 fprintf(stderr, "Binding to parameterize is not for parameter\n");
                                 return VALUE_NIL;
@@ -607,12 +619,12 @@ tailcall_label:
                             // XXX I guess during this call new_dyn_frame could
                             // be collected because i->current_dynamic_frame
                             // gets reset by the call
-                            new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, convert_expr, f->env, VALUE_NIL);
+                            new_dyn_frame->val = interp_eval_env(i, f, dyn_frame, convert_expr, value_to_environment(f->env_v), VALUE_NIL);
                             f->locals[NUM_LOCALS-1] = cdr(f->locals[NUM_LOCALS-1]);
                         }
                         // XXX new_dyn_frame should not be NULL, that woul mean
                         // no bindings done
-                        value ret = interp_eval_env(i, f, new_dyn_frame, f->locals[2], f->env, VALUE_NIL);
+                        value ret = interp_eval_env(i, f, new_dyn_frame, f->locals[2], value_to_environment(f->env_v), VALUE_NIL);
                         i->current_dynamic_frame = orig_dynamic_chain;
                         return ret;
                     default:
@@ -634,7 +646,7 @@ tailcall_label:
                 }
                 // evaluate all arguments
                 for (int j = 0; j < arg_count; j++) {
-                    f->locals[j+1] = interp_eval_env(i, f, dyn_frame, f->locals[j+1], f->env, VALUE_NIL);
+                    f->locals[j+1] = interp_eval_env(i, f, dyn_frame, f->locals[j+1], value_to_environment(f->env_v), VALUE_NIL);
                 }
                 // all the interp_eval_env could have cause GC, which would have
                 // wrecked our "op", so we need to reset it from the
@@ -697,7 +709,7 @@ apply_eval_label:
                     // XXX feels as if we can just reuse the current environment if
                     // ->outer is lambda->env, btu somehow that doesn't work...
                     struct interp_lambda *lambda = value_to_interp_lambda(op);
-                    f->extra_env = env_new(i->alloc, lambda->env);
+                    f->extra_env_v = make_environment(i->alloc, env_new(i->alloc, value_to_environment(lambda->env_v)));
                     if (lambda->variadic) {
                         int ax;
                         if (arg_count < lambda->arity - 1) {
@@ -706,7 +718,7 @@ apply_eval_label:
                             return VALUE_NIL;
                         }
                         for (ax = 0; ax < lambda->arity - 1; ax++) {
-                            env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], f->locals[ax+1]);
+                            env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[ax], f->locals[ax+1]);
                         }
                         value arg_list = VALUE_EMPTY_LIST;
                         value current_arg = VALUE_NIL;
@@ -722,7 +734,7 @@ apply_eval_label:
                             }
                             current_arg = temp;
                         }
-                        env_bind(i->alloc, f->extra_env, lambda->arg_names[ax], arg_list);
+                        env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[ax], arg_list);
                     }
                     else {
                         if (lambda->arity != arg_count) {
@@ -731,12 +743,12 @@ apply_eval_label:
                             return VALUE_NIL;
                         }
                         for (int idx = 0; idx < arg_count; idx++) {
-                            env_bind(i->alloc, f->extra_env, lambda->arg_names[idx], f->locals[idx+1]);
+                            env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[idx], f->locals[idx+1]);
                         }
                     }
                     f->expr = lambda->body;
-                    f->env = f->extra_env;
-                    f->extra_env = NULL;
+                    f->env_v = f->extra_env_v;
+                    f->extra_env_v = VALUE_NIL;
                     goto tailcall_label;
                 }
                 else if (value_is_param(op)) {
@@ -768,24 +780,17 @@ apply_eval_label:
 }
 
 value interp_eval(struct interp *i, value expr) {
-    return interp_eval_env(i, NULL, NULL, expr, i->top_env, VALUE_NIL);
+    return interp_eval_env(i, NULL, NULL, expr, value_to_environment(i->top_env_v), VALUE_NIL);
 }
 
-void interp_add_gc_root_env(struct allocator_gc_ctx *gc, struct interp_env *env) {
-    while (env) {
-        allocator_gc_add_nonval_root(gc, env);
-        allocator_gc_add_root_fp(gc, &env->first_entry_v);
-        env = env->outer;
-    }
-}
-
+// XXX we add envs quite redundantly, as they also come through the lambdas and
+// the call frames reuse them. we could color them and thereby add them only
+// once each, flip the colors on each run
 void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f) {
     while (f) {
         allocator_gc_add_root_fp(gc, &f->expr);
-        interp_add_gc_root_env(gc, f->env);
-        if (f->extra_env) {
-            interp_add_gc_root_env(gc, f->extra_env);
-        }
+        allocator_gc_add_root_fp(gc, &f->env_v);
+        allocator_gc_add_root_fp(gc, &f->extra_env_v);
         for (int i = 0; i < NUM_LOCALS; i++) {
             allocator_gc_add_root_fp(gc, &f->locals[i]);
         }
@@ -808,7 +813,7 @@ void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l
     for (int i = 0; i < l->arity; i++) {
         allocator_gc_add_root_fp(gc, &l->arg_names[i]);
     }
-    interp_add_gc_root_env(gc, l->env);
+    allocator_gc_add_root_fp(gc, &l->env_v);
 }
 
 void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_entry *ee) {
@@ -817,9 +822,14 @@ void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_en
     allocator_gc_add_root_fp(gc, &ee->next_entry_v);
 }
 
+void interp_traverse_env(struct allocator_gc_ctx *gc, struct interp_env *env) {
+    allocator_gc_add_root_fp(gc, &env->first_entry_v);
+    allocator_gc_add_root_fp(gc, &env->outer_v);
+}
+
 void interp_gc(struct interp *i) {
     struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
-    interp_add_gc_root_env(gc, i->top_env);
+    allocator_gc_add_root_fp(gc, &i->top_env_v);
     interp_add_gc_root_frame(gc, i->current_frame);
     interp_add_gc_dynamic_chain(gc, i->current_dynamic_frame);
     allocator_gc_perform(gc);
