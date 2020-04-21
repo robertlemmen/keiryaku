@@ -69,6 +69,7 @@
  *   001 - parameter
  *   010 - port
  *   011 - environment entry
+ *   100 - interpreter dynamic frames
  *
  *  */
 
@@ -110,6 +111,7 @@ typedef uint64_t value;
 #define SUBTYPE_PARAM          0b001
 #define SUBTYPE_PORT           0b010
 #define SUBTYPE_ENV_ENTRY      0b011
+#define SUBTYPE_DYN_FRAME      0b100
 
 #define VALUE_NIL         0b00000000
 #define VALUE_TRUE        0b00100000
@@ -263,6 +265,16 @@ struct interp_env* value_to_environment(value v);
 struct interp_env_entry;
 value make_env_entry(struct allocator *a, struct interp_env_entry *entry);
 struct interp_env_entry* value_to_env_entry(value v);
+
+/* Interpreter Dynamic Frames
+ * */
+
+#define value_is_dyn_frame(x) (   (value_type(x) == TYPE_BOXED) \
+                               && (value_subtype(x) == SUBTYPE_DYN_FRAME))
+
+struct dynamic_frame;
+value make_dyn_frame(struct allocator *a, struct dynamic_frame *df);
+struct dynamic_frame* value_to_dyn_frame(value v);
 
 /* Dynamic Bindings
  * */

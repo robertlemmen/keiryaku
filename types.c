@@ -335,6 +335,18 @@ struct interp_env_entry* value_to_env_entry(value v) {
     return ret;
 }
 
+value make_dyn_frame(struct allocator *a, struct dynamic_frame *df) {
+    assert(*(uint8_t*)df == SUBTYPE_DYN_FRAME);
+    return (uint64_t)df | TYPE_BOXED;
+}
+
+struct dynamic_frame* value_to_dyn_frame(value v) {
+    assert(value_type(v) == TYPE_BOXED);
+    struct dynamic_frame *ret = value_to_cell(v);
+    assert(*(uint8_t*)ret == SUBTYPE_DYN_FRAME);
+    return ret;
+}
+
 struct param_box {
     uint8_t sub_type;
     struct param param;

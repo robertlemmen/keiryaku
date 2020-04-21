@@ -32,7 +32,7 @@ struct interp {
     struct allocator *alloc;
     value top_env_v;        // always a interp_env
     struct call_frame *current_frame;
-    struct dynamic_frame *current_dynamic_frame;
+    value current_dynamic_frame_v; // always a dynamic_frame
 };
 
 struct interp_lambda {
@@ -168,7 +168,7 @@ struct interp* interp_new(struct allocator *alloc) {
     ret->alloc = alloc;
     ret->top_env_v = make_environment(alloc, top_env);
     ret->current_frame = NULL;
-    ret->current_dynamic_frame = NULL;
+    ret->current_dynamic_frame_v = VALUE_NIL;
 
     bind_builtins(alloc, top_env);
 
@@ -266,7 +266,7 @@ int interp_count_nonlist(value expr, bool *well_formed) {
 // XXX currently we are limited to that many arguments for most calls, which is
 // silly. but the call frame should be of limited size. so we need some sort of
 // overflow mechanism. or we always use a list...
-#define NUM_LOCALS  7
+#define NUM_LOCALS  8
 
 struct call_frame {
     value expr;                     // expr to be evaluated in this frame
@@ -277,9 +277,10 @@ struct call_frame {
 };
 
 struct dynamic_frame {
+    uint8_t sub_type;
     value param;
     value val;
-    struct dynamic_frame *outer;
+    value outer_v;  // always a dynamic_frame
 };
 
 inline __attribute__((always_inline))
@@ -590,7 +591,7 @@ tailcall_label:
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        struct dynamic_frame *orig_dynamic_chain = i->current_dynamic_frame;
+                        f->locals[NUM_LOCALS-3] = i->current_dynamic_frame_v;
                         // this is an iterator over f->locals[1]
                         // XXX can this conflict with another use of the same
                         // local?
@@ -600,11 +601,12 @@ tailcall_label:
                         // CONS or EMPTY, needs to be well-formed
                         while (value_type(f->locals[NUM_LOCALS-1]) == TYPE_CONS) {
                             f->locals[NUM_LOCALS-2] = car(f->locals[NUM_LOCALS-1]);
-                            new_dyn_frame = allocator_alloc_nonmoving(i->alloc, sizeof(struct dynamic_frame));
-                            new_dyn_frame->outer = i->current_dynamic_frame;
+                            new_dyn_frame = allocator_alloc(i->alloc, sizeof(struct dynamic_frame));
+                            new_dyn_frame->sub_type = SUBTYPE_DYN_FRAME;
+                            new_dyn_frame->outer_v = i->current_dynamic_frame_v;
                             new_dyn_frame->param = VALUE_NIL;
                             new_dyn_frame->val = VALUE_NIL;
-                            i->current_dynamic_frame = new_dyn_frame;
+                            i->current_dynamic_frame_v = make_dyn_frame(i->alloc, new_dyn_frame);
                             // it is important to do the value of the pair
                             // first, as the new dynamic frame is already
                             // visible during the evaluation. a NIL param
@@ -629,7 +631,7 @@ tailcall_label:
                         // XXX new_dyn_frame should not be NULL, that woul mean
                         // no bindings done
                         value ret = interp_eval_env(i, f, new_dyn_frame, f->locals[2], value_to_environment(f->env_v), VALUE_NIL);
-                        i->current_dynamic_frame = orig_dynamic_chain;
+                        i->current_dynamic_frame_v = f->locals[NUM_LOCALS-3];
                         return ret;
                     default:
                         fprintf(stderr, "Unknown special 0x%lX\n", special);
@@ -762,7 +764,7 @@ apply_eval_label:
                         if (dyn_frame_iter->param == op) {
                             return dyn_frame_iter->val;
                         }
-                        dyn_frame_iter = dyn_frame_iter->outer;
+                        dyn_frame_iter = value_to_dyn_frame(dyn_frame_iter->outer_v);
                     }
                     return p->init;
                 }
@@ -802,13 +804,10 @@ void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f)
     }
 }
 
-void interp_add_gc_dynamic_chain(struct allocator_gc_ctx *gc, struct dynamic_frame *df) {
-    while (df) {
-        allocator_gc_add_nonval_root(gc, df);
-        allocator_gc_add_root_fp(gc, &df->param);
-        allocator_gc_add_root_fp(gc, &df->val);
-        df = df->outer;
-    }
+void interp_traverse_dynamic_frame(struct allocator_gc_ctx *gc, struct dynamic_frame *df) {
+    allocator_gc_add_root_fp(gc, &df->param);
+    allocator_gc_add_root_fp(gc, &df->val);
+    allocator_gc_add_root_fp(gc, &df->outer_v);
 }
 
 void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
@@ -833,7 +832,8 @@ void interp_traverse_env(struct allocator_gc_ctx *gc, struct interp_env *env) {
 void interp_gc(struct interp *i) {
     struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
     allocator_gc_add_root_fp(gc, &i->top_env_v);
+    allocator_gc_add_root_fp(gc, &i->current_dynamic_frame_v);
     interp_add_gc_root_frame(gc, i->current_frame);
-    interp_add_gc_dynamic_chain(gc, i->current_dynamic_frame);
+
     allocator_gc_perform(gc);
 }

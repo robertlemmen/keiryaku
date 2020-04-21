@@ -22,6 +22,9 @@ void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_en
 void interp_traverse_env(struct allocator_gc_ctx *gc, struct interp_env *env) {
 }
 
+void interp_traverse_dynamic_frame(struct allocator_gc_ctx *gc, struct dynamic_frame *df) {
+}
+
 void traverse_port(struct allocator_gc_ctx *gc, value p) {
 }
 

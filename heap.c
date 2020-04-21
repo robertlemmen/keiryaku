@@ -563,6 +563,9 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                             case SUBTYPE_ENV_ENTRY:
                                 interp_traverse_env_entry(gc, value_to_cell(cv));
                                 break;
+                            case SUBTYPE_DYN_FRAME:
+                                interp_traverse_dynamic_frame(gc, value_to_cell(cv));
+                                break;
                             case SUBTYPE_PORT:
                                 // XXX should probably take a real port struct, not a
                                 // value as second arg
