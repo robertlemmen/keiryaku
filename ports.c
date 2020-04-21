@@ -39,8 +39,6 @@ struct port {
     value result;
     struct result_list_entry *result_overflow_oldest;
     struct result_list_entry *result_overflow_youngest;
-    // XXX we only need a buffer and parser when we use (read ...) on this port,
-    // not for e.g. text files. so this could be lazily allocated when needed
     char buffer[BUFSIZE];
 };
 
@@ -64,7 +62,7 @@ static void parser_callback(value expr, void *arg) {
 }
 
 value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bool binary) {
-    struct port *ps = allocator_alloc_nonmoving(a, sizeof(struct port));
+    struct port *ps = allocator_alloc(a, sizeof(struct port));
     ps->sub_type = SUBTYPE_PORT;
     ps->tty = false;
     ps->in = in;
@@ -81,7 +79,7 @@ value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bo
 }
 
 value port_new_tty(struct allocator *a) {
-    struct port *ps = allocator_alloc_nonmoving(a, sizeof(struct port));
+    struct port *ps = allocator_alloc(a, sizeof(struct port));
     ps->sub_type = SUBTYPE_PORT;
     ps->tty = true;
     ps->in = true;
