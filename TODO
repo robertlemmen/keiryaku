@@ -1,5 +1,10 @@
+general
+-------
++ write a nice README
+
 language completeness
 ---------------------
++ fix up  the 5 euler tests and move the included base defines to compiler.ss
 + more tests for srfi-1
 + and port more basic r7rs tests from chibi
 - assoc should support 3-arity comparator case, see member
@@ -7,28 +12,26 @@ language completeness
 core features
 -------------
 + raise and friends
+- characters
 - call/cc, also unlocks (values ...) and friends
+- numerical tower
 
 technicalities
 --------------
-- write with linenoise should perhaps add to linenoise so that typing after
-  output does not erase the output
-- implement argument overflow logic in interp.c eval frame
-- turn push-parsing into pulling style, move parser out of types
++ implement argument overflow logic in interp.c eval frame
 - equals? needs implementation for vectors
 - equals? should support cyclic structures, also dump_values and list?
 - refactor type tagging, use all lower bits to signal immediate, to yield
   more non-immediate types
 - reduce includes-graph
-- fix tabs in readline/linenoise
+- fix tab behavior in linenoise
 
 memory management
 -----------------
-- where do all the non-moving allocs come from? is there a way to reduce the
-  number? it's env_bind and env_new together
++ write barriers so that the generational GC is safe under any set! set-car! etc
++ clean up generational GC work and remove extra logging, merge into master
++ use word-sized unmarking
 - adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
-- do not trace into tenured on young GC, needs write barriers and that all
-  objects that are allocated directly into tenured (nonmoving) are also roots
 - clean up empty arenas at end, to find stuff that we failed to collect
 - destructor-on-gc e.g. for ports? kinda requires a second, dumber GC tracking
   for these special objects. perhaps ok, there should be few of these...
@@ -36,5 +39,5 @@ memory management
 performance
 -----------
 + interp_env_entry should not be linked list
-- vectors could be direct pointers (?)
+- lookup vectors could be weak references
 - more symbols could be replaced with vectors (?)

@@ -188,6 +188,7 @@ int main(int argc, char **argv) {
     }
 
     if (arg_debug) {
+        allocator_request_gc(a, true);
         interp_gc(i);
     }
 

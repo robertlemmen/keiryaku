@@ -92,7 +92,12 @@ value env_lookup(struct interp_env *env, value symbol, value *lookup_vector) {
             ee_v = ee->next_entry_v;
             entries++;
         }
-        env = value_to_environment(env->outer_v);
+        if (env->outer_v == VALUE_NIL) {
+            env = NULL;
+        }
+        else {
+            env = value_to_environment(env->outer_v);
+        }
         envs++;
     }
     fprintf(stderr, "Could not find symbol '%s' in environment\n", value_to_symbol(&symbol));
@@ -789,9 +794,6 @@ value interp_eval(struct interp *i, value expr) {
     return interp_eval_env(i, NULL, NULL, expr, value_to_environment(i->top_env_v), VALUE_NIL);
 }
 
-// XXX we add envs quite redundantly, as they also come through the lambdas and
-// the call frames reuse them. we could color them and thereby add them only
-// once each, flip the colors on each run
 void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f) {
     while (f) {
         allocator_gc_add_root_fp(gc, &f->expr);

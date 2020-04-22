@@ -36,12 +36,16 @@
 #define ARENA_TYPE_OLD_SURVIVOR     2
 #define ARENA_TYPE_TENURED          3
 
+// XXX make this configurable
+#define MAJOR_GC_FREQ               2
+
 struct allocator {
     arena first_nursery;
     arena first_survivor;
     arena first_tenured;
     arena arenas_free_list;
     int pressure;
+    int gc_count;
     bool gc_requested;
     bool gc_requested_full;
 };
@@ -231,6 +235,7 @@ struct allocator* allocator_new(void) {
     ret->first_nursery = alloc_arena(ret, ARENA_TYPE_NURSERY);
     ret->first_survivor = alloc_arena(ret, ARENA_TYPE_NEW_SURVIVOR);
     ret->first_tenured = alloc_arena(ret, ARENA_TYPE_TENURED);
+    ret->gc_count = 1;
     ret->pressure = 0;
     ret->gc_requested = false;
     return ret;
@@ -377,6 +382,7 @@ struct allocator_gc_list {
 struct allocator_gc_ctx {
     struct allocator *a;
     struct allocator_gc_list *list;
+    bool minor_skip_cond;
 };
 
 // XXX sometimes we use new_... and sometimes .._new!
@@ -391,12 +397,22 @@ struct allocator_gc_ctx* allocator_gc_new(struct allocator *a) {
     struct allocator_gc_ctx *ret = malloc(sizeof(struct allocator_gc_ctx));
     ret->a = a;
     ret->list = new_gc_list(NULL);
+    ret->minor_skip_cond = false;
     return ret;
 }
 
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, value *v) {
-    uint_fast16_t cell_idx = cell_index(value_to_cell(*v));
-    assert(cell_idx >= 1024);
+    // XXX is this immediate check redundant? if so assert instead
+    // XXX this skipping could be done in fastpath macro (?)
+    if ((gc->minor_skip_cond) && (!value_is_immediate(*v))) {
+        arena a = cell_to_arena(*v);
+        struct arena_header *ah = a;
+        if (ah->arena_type == ARENA_TYPE_TENURED) {
+            // do not traverse from non-tenured into tenured in minor GCs
+            fprintf(stderr, "# skipping allocator_gc_add_root(..., %p) in traversal\n", (void*)*v);
+            return;
+        }
+    }
     if (gc->list->count == GC_LIST_SIZE) {
         gc->list = new_gc_list(gc->list);
     }
@@ -404,6 +420,7 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, value *v) {
     gc->list->count++;
 }
 
+// XXX can this be removed now? might come in handy some time...
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m) {
     // we mark these right away
     uint_fast16_t cell_idx = cell_index(m);
@@ -436,13 +453,16 @@ long currentmicros() {
 long total_gc_time_us = 0;
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
-    fprintf(stderr, "# Doing GC after %i allocations (threshold %i)\n", gc->a->pressure, arg_gc_threshold);
+    bool major_gc = ((gc->a->gc_count % MAJOR_GC_FREQ) == 0) || (gc->a->gc_requested_full);
+    fprintf(stderr, "# %s GC #%i after %i allocations (threshold %i)\n",
+        major_gc ? "Major" : "Minor", gc->a->gc_count,
+        gc->a->pressure, arg_gc_threshold);
     dump_clear_alloc_stats();
     long mark_start = currentmicros();
 
-    gc->a->pressure = 0;
     gc->a->gc_requested = false;
     gc->a->gc_requested_full = false;
+    gc->a->gc_count++;
 
 //    int roots = gc->list->count;
     int visited = 0;
@@ -455,11 +475,10 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         ah->arena_type = ARENA_TYPE_OLD_SURVIVOR;
         a = ah->next;
     }
-    
+
     // we do not want to mix new survivors with old ones
     arena old_survivor = gc->a->first_survivor;
     gc->a->first_survivor = alloc_arena(gc->a, ARENA_TYPE_NEW_SURVIVOR);
-
 
     // mark phase
     while (gc->list->count) {
@@ -505,18 +524,13 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                             break;
                         }
                     }
-                    // XXX this should just go to the next type of arena, so
-                    // survivor if coming from nursery, but that blows up
-                    // quickly. I wonder whether it is because we could follow
-                    // the link to it twice, and then try to interpret it as a
-                    // forwarding pointer?
                     cell newloc = allocator_alloc_type(gc->a, cc*16, next_arena_type(ah->arena_type));
                     cell oldloc = value_to_cell(cv);
                     memcpy(newloc, oldloc, cc*16);
-/*                    printf("  moving heap item from 0x%016p to 0x%016p (arena type %i -> %i)\n", oldloc, 
+/*                    printf("  moving heap item from 0x%016p to 0x%016p (arena type %i -> %i)\n", oldloc,
                         newloc, ah->arena_type, next_arena_type(ah->arena_type));*/
                     if (arg_debug) {
-                        memset(oldloc, 0x19, cc*16); 
+                        memset(oldloc, 0x19, cc*16);
                     }
                     memcpy(oldloc, &newloc, sizeof(void*));
 
@@ -537,12 +551,13 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                         cell oldloc = value_to_cell(cv);
                         cell newloc;
                         memcpy(&newloc, oldloc, sizeof(void*));
-/*                        printf("  following forwarding pointer 0x%016p to 0x%016p where oldloc is arena_type %i\n", 
+/*                        printf("  following forwarding pointer 0x%016p to 0x%016p where oldloc is arena_type %i\n",
                             oldloc, newloc, ah->arena_type);*/
                         *cvptr = (uint64_t)newloc | value_type(cv);
                     }
                 }
             }
+            gc->minor_skip_cond = !major_gc && (ah->arena_type != ARENA_TYPE_TENURED);
             if (traverse) {
                 switch (value_type(cv)) {
                     case TYPE_CONS:
@@ -573,8 +588,8 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                                 break;
                             case SUBTYPE_PARAM:;
                                 struct param *cp = value_to_parameter(cv);
-                                allocator_gc_add_root_fp(gc, &(cp->init)); 
-                                allocator_gc_add_root_fp(gc, &(cp->convert)); 
+                                allocator_gc_add_root_fp(gc, &(cp->init));
+                                allocator_gc_add_root_fp(gc, &(cp->convert));
                                 break;
                             default:;
                             // not traversable
@@ -590,39 +605,49 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     // sweep tenured
     a = gc->a->first_tenured;
     while (a) {
-        // XXX of course we want to do this with word-sized manipulations, not
-        // looping
-        for (int i = 1024; i < 65535; i++) {
-            if (meta_get_block(a, i) && !meta_get_mark(a, i)) {
-                reclaimed++;
-                meta_clear_block(a, i);
-                meta_set_mark(a, i);
-                // printf("reclaiming 0x%016lX\n", cell_from_cell_index(a, i));
-                // reclaim extent
-                int j = i+1;
-                while ((j != 0) && (!meta_get_block(a, j) && !meta_get_mark(a, j))) {
-                    meta_set_mark(a, j);
+        if (major_gc) {
+            // XXX of course we want to do this with word-sized manipulations, not
+            // looping
+            for (int i = 1024; i < 65535; i++) {
+                if (meta_get_block(a, i) && !meta_get_mark(a, i)) {
+                    reclaimed++;
+                    meta_clear_block(a, i);
+                    meta_set_mark(a, i);
+                    // printf("reclaiming 0x%016lX\n", cell_from_cell_index(a, i));
+                    // reclaim extent
+                    int j = i+1;
+                    while ((j != 0) && (!meta_get_block(a, j) && !meta_get_mark(a, j))) {
+                        meta_set_mark(a, j);
+                    }
+                    // XXX deal with subsequent extents
+                    if (arg_debug) {
+                        void *cell = cell_from_cell_index(a, i);
+                        assert(cell_to_arena(cell) == a);
+                        assert(cell_index(cell) == i);
+                        memset(cell, 0x42, 16);
+                        // XXX also wipe extents
+                    }
                 }
-                // XXX deal with subsequent extents
-                if (arg_debug) {
-                    void *cell = cell_from_cell_index(a, i);
-                    assert(cell_to_arena(cell) == a);
-                    assert(cell_index(cell) == i);
-                    memset(cell, 0x42, 16);
-                    // XXX also wipe extents
+            }
+            // XXX temp unmark, same as minor so move outside if/else
+            for (int i = 1024; i < 65535; i++) {
+                if (meta_get_block(a, i) && meta_get_mark(a, i)) {
+                    meta_clear_mark(a, i);
                 }
             }
         }
-        // XXX temp unmark
-        for (int i = 1024; i < 65535; i++) {
-            if (meta_get_block(a, i) && meta_get_mark(a, i)) {
-                meta_clear_mark(a, i);
+        else {
+            // minor GC, just unmark
+            for (int i = 1024; i < 65535; i++) {
+                if (meta_get_block(a, i) && meta_get_mark(a, i)) {
+                    meta_clear_mark(a, i);
+                }
             }
         }
         struct arena_header *ah = a;
         // reset scan_cache, we can just set this as it is only a lower bound
-        ah->scan_cache = 1024;
         a = ah->next;
+        ah->scan_cache = 1024;
     }
 
     // also unmark the survivor pages
@@ -649,16 +674,18 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         recycle_arena(gc->a, old_survivor);
         old_survivor = temp;
     }
-//    printf("# %i roots, %i visited, %i reclaimed\n", roots, visited, reclaimed);
-//    fflush(stdout);
     long sweep_end = currentmicros();
 
-    fprintf(stderr, "# GC done with mark phase of %lius and sweep of %lius\n", mark_end - mark_start, sweep_end - mark_end);
+    fprintf(stderr, "#   %i heap items traced, %i reclaimed in tenured\n", visited, reclaimed);
+    fprintf(stderr, "# Finished %s GC with mark phase of %lius and sweep of %lius\n",
+        major_gc ? "major" : "minor",
+        mark_end - mark_start, sweep_end - mark_end);
     dump_clear_alloc_stats();
     fprintf(stderr, "\n");
 
     total_gc_time_us += sweep_end - mark_start;
 
+    gc->a->pressure = 0;
     free(gc->list);
     free(gc);
 }
