@@ -1,4 +1,4 @@
-CFLAGS ?= -std=c11 -D_GNU_SOURCE -pthread -Wall -g
+CFLAGS ?= -std=c11 -D_GNU_SOURCE -pthread -fPIC -Wall -g
 CC := gcc
 TARGET := keiryaku
 

@@ -1,7 +1,3 @@
-general
--------
-+ write a nice README
-
 language completeness
 ---------------------
 + fix up  the 5 euler tests and move the included base defines to compiler.ss
