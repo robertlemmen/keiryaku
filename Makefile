@@ -28,13 +28,12 @@ test: $(TARGET)
 	@echo
 	@echo "Running Contract Tests..."
 	@tdir=`mktemp -d`; \
-	echo "results in $$tdir"; \
 	failed_count=0; \
 	for tf in $$(find t -name "*.t" | sort); do \
 		[ -e "$$tf" ] || continue; \
 		echo "  $$tf ..."; \
-		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) --debug > $$tdir/result; \
 		cat $$tf | grep -v "^;" | sed '1,/===/d' > $$tdir/expected; \
+		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) --debug > $$tdir/result; \
 		diff -uB $$tdir/expected /$$tdir/result > $$tdir/diff || true; \
 		if [ -s $$tdir/diff ]; then \
 			echo; \
