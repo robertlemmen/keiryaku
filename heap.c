@@ -382,7 +382,7 @@ struct allocator_gc_list {
 struct allocator_gc_ctx {
     struct allocator *a;
     struct allocator_gc_list *list;
-    bool minor_skip_cond;
+    bool major_gc;
 };
 
 // XXX sometimes we use new_... and sometimes .._new!
@@ -397,21 +397,20 @@ struct allocator_gc_ctx* allocator_gc_new(struct allocator *a) {
     struct allocator_gc_ctx *ret = malloc(sizeof(struct allocator_gc_ctx));
     ret->a = a;
     ret->list = new_gc_list(NULL);
-    ret->minor_skip_cond = false;
+    ret->major_gc = ((a->gc_count % MAJOR_GC_FREQ) == 0) || (a->gc_requested_full);
     return ret;
 }
 
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, value *v) {
     // XXX is this immediate check redundant? if so assert instead
     // XXX this skipping could be done in fastpath macro (?)
-    if ((gc->minor_skip_cond) && (!value_is_immediate(*v))) {
-        arena a = cell_to_arena(*v);
-        struct arena_header *ah = a;
-        if (ah->arena_type == ARENA_TYPE_TENURED) {
-            // do not traverse from non-tenured into tenured in minor GCs
-            fprintf(stderr, "# skipping allocator_gc_add_root(..., %p) in traversal\n", (void*)*v);
-            return;
-        }
+    arena a = cell_to_arena(*v);
+    struct arena_header *ah = a;
+    if ((!gc->major_gc) && (ah->arena_type == ARENA_TYPE_TENURED)) {
+        // do not take tenured/old generation roots or heap items on minor
+        // collections
+        fprintf(stderr, "# skipping allocator_gc_add_root(..., %p) in traversal\n", (void*)*v);
+        return;
     }
     if (gc->list->count == GC_LIST_SIZE) {
         gc->list = new_gc_list(gc->list);
@@ -453,9 +452,8 @@ long currentmicros() {
 long total_gc_time_us = 0;
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
-    bool major_gc = ((gc->a->gc_count % MAJOR_GC_FREQ) == 0) || (gc->a->gc_requested_full);
     fprintf(stderr, "# %s GC #%i after %i allocations (threshold %i)\n",
-        major_gc ? "Major" : "Minor", gc->a->gc_count,
+        gc->major_gc ? "Major" : "Minor", gc->a->gc_count,
         gc->a->pressure, arg_gc_threshold);
     dump_clear_alloc_stats();
     long mark_start = currentmicros();
@@ -557,7 +555,6 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                     }
                 }
             }
-            gc->minor_skip_cond = !major_gc && (ah->arena_type != ARENA_TYPE_TENURED);
             if (traverse) {
                 switch (value_type(cv)) {
                     case TYPE_CONS:
@@ -605,7 +602,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     // sweep tenured
     a = gc->a->first_tenured;
     while (a) {
-        if (major_gc) {
+        if (gc->major_gc) {
             // XXX of course we want to do this with word-sized manipulations, not
             // looping
             for (int i = 1024; i < 65535; i++) {
@@ -678,7 +675,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 
     fprintf(stderr, "#   %i heap items traced, %i reclaimed in tenured\n", visited, reclaimed);
     fprintf(stderr, "# Finished %s GC with mark phase of %lius and sweep of %lius\n",
-        major_gc ? "major" : "minor",
+        gc->major_gc ? "major" : "minor",
         mark_end - mark_start, sweep_end - mark_end);
     dump_clear_alloc_stats();
     fprintf(stderr, "\n");
