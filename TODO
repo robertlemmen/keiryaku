@@ -20,7 +20,6 @@ technicalities
 - refactor type tagging, use all lower bits to signal immediate, to yield
   more non-immediate types
 - reduce includes-graph
-- fix tab behavior in linenoise
 - the inlining around interp_eval_env does not seem to work, still shows up in
   call graphs
 - double-check that simple tail recursions can actually be done in bound memory

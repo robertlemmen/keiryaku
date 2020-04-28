@@ -5,7 +5,10 @@
 #include <string.h>
 #include <stdlib.h>
 #include <pwd.h>
-#include "linenoise/linenoise.c"
+#include <unistd.h>
+#include <sys/types.h>
+
+#include "linenoise/linenoise.h"
 
 #include "heap.h"
 #include "parse.h"
@@ -82,7 +85,7 @@ value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bo
     ps->result = VALUE_NIL;
     ps->result_overflow_youngest = NULL;
     ps->result_overflow_oldest = NULL;
-    //fprintf(stderr, "new port allocated at %p\n", ps);
+
     return (uint64_t)ps | TYPE_BOXED;
 }
 
@@ -111,8 +114,8 @@ value port_new_tty(struct allocator *a) {
     history_file = malloc(strlen(homedir) + strlen("/.keiryaku_history") + 1);
     sprintf(history_file, "%s/.keiryaku_history", homedir);
     linenoiseHistoryLoad(history_file);
+    linenoiseSetCompletionCallback(NULL);
 
-    //fprintf(stderr, "new tty port allocated at %p\n", ps);
     return (uint64_t)ps | TYPE_BOXED;
 }
 
