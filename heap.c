@@ -77,30 +77,6 @@ struct arena_header {
     uint16_t scan_cache;
 };
 
-void hexdump(uint8_t *d, int l) {
-    for (int i = 0; i < l; i++) {
-        if ((i % 16) == 0) {
-            printf("\n  ");
-        }
-        else if ((i % 8) == 0) {
-            printf(" ");
-        }
-        printf("%02X ", d[i]);
-    }
-    printf("\n");
-}
-
-void dump_arena_meta(arena a) {
-    printf("Arena at %p:\n", a);
-    struct arena_header *ah = a;
-    printf("scan_cache: %i\n", ah->scan_cache);
-    uint8_t *cp = a;
-    printf("block bitmap:");
-    hexdump(cp+128, 32);
-    printf("\nmark bitmap:");
-    hexdump(cp+128+8192, 32);
-}
-
 // XXX sometimes we use new_... and sometimes .._new!
 struct allocator_gc_list* new_gc_list(struct allocator_gc_list *prev) {
     struct allocator_gc_list *ret =  malloc(sizeof(struct allocator_gc_list));
@@ -408,8 +384,7 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, value *v) {
     if (gc->list->count == GC_LIST_SIZE) {
         gc->list = new_gc_list(gc->list);
     }
-    gc->list->valueps[gc->list->count] = v;
-    gc->list->count++;
+    gc->list->valueps[gc->list->count++] = v;
 }
 
 // XXX we could have a _fp macro that does the immediate check...
@@ -427,16 +402,14 @@ void write_barrier(struct allocator *a, value c, value *n) {
             if (a->remset_once->count == GC_LIST_SIZE) {
                 a->remset_once = new_gc_list(a->remset_once);
             }
-            a->remset_once->values[a->remset_once->count] = c;
-            a->remset_once->count++;
+            a->remset_once->values[a->remset_once->count++] = c;
             // references that go over two generations need to be handled the
             // next *two* collections
             if (nah->arena_type == ARENA_TYPE_NURSERY) {
                 if (a->remset_twice->count == GC_LIST_SIZE) {
                     a->remset_twice = new_gc_list(a->remset_twice);
                 }
-                a->remset_twice->values[a->remset_twice->count] = c;
-                a->remset_twice->count++;
+                a->remset_twice->values[a->remset_twice->count++] = c;
             }
         }
         if (       (cah->arena_type == ARENA_TYPE_NEW_SURVIVOR)
@@ -444,8 +417,7 @@ void write_barrier(struct allocator *a, value c, value *n) {
             if (a->remset_next->count == GC_LIST_SIZE) {
                 a->remset_next = new_gc_list(a->remset_next);
             }
-            a->remset_next->values[a->remset_next->count] = c;
-            a->remset_next->count++;
+            a->remset_next->values[a->remset_next->count++] = c;
         }
     }
 }
@@ -549,7 +521,9 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     arena old_survivor = gc->a->first_survivor;
     gc->a->first_survivor = alloc_arena(gc->a, ARENA_TYPE_NEW_SURVIVOR);
 
-    // XXX explain
+    // handle remembered sets: we traverse the _once and _twice sets, and copy
+    // the items from _twice into a temp set so that it can be combined with
+    // _next after the marking (but before sweep)
     struct allocator_gc_list *remset_temp = new_gc_list(NULL);
     if (!gc->major_gc) {
         while (gc->a->remset_once->count) {
@@ -574,8 +548,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             if (remset_temp->count == GC_LIST_SIZE) {
                 remset_temp = new_gc_list(remset_temp);
             }
-            remset_temp->values[remset_temp->count] = cv;
-            remset_temp->count++;
+            remset_temp->values[remset_temp->count++] = cv;
         }
     }
     // remset_next is weird because the containers themselves might move
@@ -602,75 +575,70 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             gc->list = temp->prev;
             free(temp);
         }
-        // XXX not sure where we ever get a 0 value from...
-        // XXX and not sure this can ever be immediate as we already check when
-        // putting on the list...
-        if (cv != 0 && !value_is_immediate(cv)) {
-            visited++;
-            arena a = cell_to_arena(value_to_cell(cv));
-            struct arena_header *ah = a;
-            uint_fast16_t cell_idx = cell_index(value_to_cell(cv));
-            assert(cell_idx >= 1024);
-            assert(meta_get_block(a, cell_idx));
-            bool traverse = false;
-            if (ah->arena_type == ARENA_TYPE_TENURED) {
-                if (!meta_get_mark(a, cell_idx)) {
-                    meta_set_mark(a, cell_idx);
-                    traverse = true;
+        visited++;
+        arena a = cell_to_arena(value_to_cell(cv));
+        struct arena_header *ah = a;
+        uint_fast16_t cell_idx = cell_index(value_to_cell(cv));
+        assert(cell_idx >= 1024);
+        assert(meta_get_block(a, cell_idx));
+        bool traverse = false;
+        if (ah->arena_type == ARENA_TYPE_TENURED) {
+            if (!meta_get_mark(a, cell_idx)) {
+                meta_set_mark(a, cell_idx);
+                traverse = true;
+            }
+        }
+        else {
+            if (!meta_get_mark(a, cell_idx)) {
+                meta_set_mark(a, cell_idx);
+                // XXX we use the same in add_nonval_root above, refactor
+                int cc = 1;
+                for (int i = cell_idx + 1; cell_idx < 65536; i++) {
+                    if ((! meta_get_mark(a, i)) && (! meta_get_block(a, i))) {
+                        cc++;
+                    }
+                    else {
+                        break;
+                    }
                 }
+                cell newloc = allocator_alloc_type(gc->a, cc*16, next_arena_type(ah->arena_type));
+                cell oldloc = value_to_cell(cv);
+                memcpy(newloc, oldloc, cc*16);
+                promoted++;
+                value nv = (uint64_t)newloc | value_type(cv);
+                //fprintf(stderr, "  moving heap item %p -> %p (arena type %i -> %i)\n",
+                //    (void*)cv, (void*)nv, ah->arena_type, next_arena_type(ah->arena_type));
+                if (arg_debug) {
+                    memset(oldloc, 0x19, cc*16);
+                }
+                // install the forwarding pointer
+                memcpy(oldloc, &newloc, sizeof(void*));
+
+                traverse = true;
+                cv = nv;
+                *cvptr = cv;
+                // we can have the same item on the root list twice, so the
+                // second time around we find the already-moved version. so
+                // we need to mark the target too
+                arena new_a = cell_to_arena(value_to_cell(cv));
+                uint_fast16_t new_cell_idx = cell_index(value_to_cell(cv));
+                meta_set_mark(new_a, new_cell_idx);
             }
             else {
-                if (!meta_get_mark(a, cell_idx)) {
-                    meta_set_mark(a, cell_idx);
-                    // XXX we use the same in add_nonval_root above, refactor
-                    int cc = 1;
-                    for (int i = cell_idx + 1; cell_idx < 65536; i++) {
-                        if ((! meta_get_mark(a, i)) && (! meta_get_block(a, i))) {
-                            cc++;
-                        }
-                        else {
-                            break;
-                        }
-                    }
-                    cell newloc = allocator_alloc_type(gc->a, cc*16, next_arena_type(ah->arena_type));
+                // we may see the same item twice, and then we do not want
+                // to promote it twice
+                if (ah->arena_type != ARENA_TYPE_NEW_SURVIVOR) {
                     cell oldloc = value_to_cell(cv);
-                    memcpy(newloc, oldloc, cc*16);
-                    promoted++;
-                    value nv = (uint64_t)newloc | value_type(cv);
-                    //fprintf(stderr, "  moving heap item %p -> %p (arena type %i -> %i)\n",
-                    //    (void*)cv, (void*)nv, ah->arena_type, next_arena_type(ah->arena_type));
-                    if (arg_debug) {
-                        memset(oldloc, 0x19, cc*16);
-                    }
-                    // install the forwarding pointer
-                    memcpy(oldloc, &newloc, sizeof(void*));
-
-                    traverse = true;
-                    cv = nv;
-                    *cvptr = cv;
-                    // we can have the same item on the root list twice, so the
-                    // second time around we find the already-moved version. so
-                    // we need to mark the target too
-                    arena new_a = cell_to_arena(value_to_cell(cv));
-                    uint_fast16_t new_cell_idx = cell_index(value_to_cell(cv));
-                    meta_set_mark(new_a, new_cell_idx);
-                }
-                else {
-                    // we may see the same item twice, and then we do not want
-                    // to promote it twice
-                    if (ah->arena_type != ARENA_TYPE_NEW_SURVIVOR) {
-                        cell oldloc = value_to_cell(cv);
-                        cell newloc;
-                        memcpy(&newloc, oldloc, sizeof(void*));
+                    cell newloc;
+                    memcpy(&newloc, oldloc, sizeof(void*));
 /*                        printf("  following forwarding pointer 0x%016p to 0x%016p where oldloc is arena_type %i\n",
-                            oldloc, newloc, ah->arena_type);*/
-                        *cvptr = (uint64_t)newloc | value_type(cv);
-                    }
+                        oldloc, newloc, ah->arena_type);*/
+                    *cvptr = (uint64_t)newloc | value_type(cv);
                 }
             }
-            if (traverse) {
-                traverse_heap_item(gc, cv);
-            }
+        }
+        if (traverse) {
+            traverse_heap_item(gc, cv);
         }
     }
     long mark_end = currentmicros();
@@ -698,8 +666,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             if (gc->a->remset_once->count == GC_LIST_SIZE) {
                 gc->a->remset_once = new_gc_list(gc->a->remset_once);
             }
-            gc->a->remset_once->values[gc->a->remset_once->count] = cv;
-            gc->a->remset_once->count++;
+            gc->a->remset_once->values[gc->a->remset_once->count++] = cv;
         }
         // go through _once and remove all items in tenured that are not
         // marked, these will be sweeped and we do not want to trace into them
@@ -742,15 +709,13 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             if (gc->a->remset_once->count == GC_LIST_SIZE) {
                 gc->a->remset_once = new_gc_list(gc->a->remset_once);
             }
-            gc->a->remset_once->values[gc->a->remset_once->count] = cv;
-            gc->a->remset_once->count++;
+            gc->a->remset_once->values[gc->a->remset_once->count++] = cv;
         }
     }
 
     // sweep tenured
     a = gc->a->first_tenured;
     while (a) {
-        // XXX should the if be outside the loop?
         if (gc->major_gc) {
             // XXX of course we want to do this with word-sized manipulations, not
             // looping
@@ -836,12 +801,4 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     gc->a->pressure = 0;
     free(gc->list);
     free(gc);
-}
-
-void mprot_arena_chain(arena a, int prot) {
-    while (a) {
-        assert(mprotect(a, ARENA_SIZE, prot) == 0);
-        struct arena_header *ah = a;
-        a = ah->next;
-    }
 }

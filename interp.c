@@ -45,9 +45,6 @@ struct interp_lambda {
                             // correct size 
 };
 
-// XXX we could also check in the nursery by address: the bump allocator will
-// mostly hand out increasing adddresses, so no pointer must go against that
-// direction or we could violate the old/new generation assumption
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
     struct interp_env *ret = allocator_alloc(alloc, (sizeof(struct interp_env)));
     ret->sub_type = SUBTYPE_ENV;
@@ -69,23 +66,12 @@ value env_lookup(struct interp_env *env, value symbol, value *lookup_vector) {
         int entries = 0;    // XXX rename, also in vector lookup, so that it is clear that this  is the number of entries, not the field in the struct
         while (ee_v != VALUE_NIL) {
             struct interp_env_entry *ee = value_to_env_entry(ee_v);
-            if (!value_is_symbol(ee->name)) {
-                assert(value_is_symbol(ee->name));
-            }
-            if (   (value_type(ee->name) == TYPE_SHORT_SYMBOL)
-                && (value_type(symbol) == TYPE_SHORT_SYMBOL)
-                && (ee->name == symbol) ) {
+            assert(value_is_symbol(ee->name));
+            if (       (ee->name == symbol) // short symbol case
+                    || (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0)) {
                 if (lookup_vector) {
                     // XXX it's somewhat ugly that this relies on alloc not
                     // being required...
-                    *lookup_vector = make_lookup_vector(NULL, envs, entries);
-                }
-                return ee->value;
-            }
-            if (   (value_type(ee->name) == TYPE_SYMBOL)
-                && (value_type(symbol) == TYPE_SYMBOL)
-                && (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) ) {
-                if (lookup_vector) {
                     *lookup_vector = make_lookup_vector(NULL, envs, entries);
                 }
                 return ee->value;
@@ -161,7 +147,8 @@ bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, valu
         while (ee_v != VALUE_NIL) {
             struct interp_env_entry *ee = value_to_env_entry(ee_v);
             assert(value_is_symbol(ee->name));
-            if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
+            if (       (ee->name == symbol) // short symbol case
+                    || (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0)) {
                 ee->value = val;
                 write_barrier(alloc, ee_v, &ee->value);
                 return true;

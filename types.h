@@ -106,7 +106,6 @@ typedef uint64_t value;
 // unused                     0b1101
 #define TYPE_BOXED            0b1111
 
-// XXX rename to BOXTYPE_ ?
 #define SUBTYPE_ENV            0b000
 #define SUBTYPE_PARAM          0b001
 #define SUBTYPE_PORT           0b010
