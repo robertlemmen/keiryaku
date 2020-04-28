@@ -5,7 +5,7 @@ TARGET := keiryaku_check
 
 SOURCES := $(shell ls *.c)
 OBJECTS := $(subst .c,.o,$(SOURCES))
-TESTED_OBJECTS=../heap.o ../types.o
+TESTED_OBJECTS=../heap.o ../types.o ../global.o
 
 .PHONY: clean check
 

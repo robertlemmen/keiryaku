@@ -10,7 +10,9 @@
 value builtin_plus(struct allocator *alloc, value l) {
     int ret = 0;
     while (value_type(l) == TYPE_CONS) {
-        ret += intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret += intval(num);
         l = cdr(l);    
     }
 
@@ -23,7 +25,9 @@ value builtin_minus(struct allocator *alloc, value l) {
     int count = 0;
     int first = 0;
     while (value_type(l) == TYPE_CONS) {
-        ret -= intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret -= intval(num);
         if (!count) {
             first = ret;
         }
@@ -39,7 +43,9 @@ value builtin_minus(struct allocator *alloc, value l) {
 value builtin_mul(struct allocator *alloc, value l) {
     int ret = 1;
     while (value_type(l) == TYPE_CONS) {
-        ret *= intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret *= intval(num);
         l = cdr(l);    
     }
 
@@ -53,7 +59,9 @@ value builtin_div(struct allocator *alloc, value l) {
     int ret = intval(car(l));
     l = cdr(l);    
     while (value_type(l) == TYPE_CONS) {
-        ret /= intval(car(l));
+        value num = car(l);
+        assert(value_type(num) == TYPE_INT);
+        ret /= intval(num);
         l = cdr(l);    
     }
 
@@ -144,7 +152,7 @@ value builtin_eq(struct allocator *alloc, value a, value b) {
 }
 
 value builtin_eqv(struct allocator *alloc, value a, value b) {
-    if (builtin_eq(alloc, a, b) == VALUE_TRUE) {
+    if (builtin_eq(alloc, a, b) != VALUE_FALSE) {
         return VALUE_TRUE;
     }
     if (value_is_string(a) && value_is_string(b)) {
@@ -158,7 +166,7 @@ value builtin_eqv(struct allocator *alloc, value a, value b) {
 // XXX equal? needs to support cyclic structures
 value builtin_equal(struct allocator *alloc, value a, value b) {
 tailcall_label:
-    if (builtin_eqv(alloc, a, b) == VALUE_TRUE) {
+    if (builtin_eqv(alloc, a, b) != VALUE_FALSE) {
         return VALUE_TRUE;
     }
     if ((value_type(a) == TYPE_CONS) && (value_type(b) == TYPE_CONS)) {
@@ -281,13 +289,13 @@ value builtin_boolean(struct allocator *alloc, value v) {
 
 value builtin_set_car(struct allocator *alloc, value p, value v) {
     assert(value_type(p) == TYPE_CONS);
-    set_car(p, v);
+    set_car(alloc, p, v);
     return VALUE_NIL;
 }
 
 value builtin_set_cdr(struct allocator *alloc, value p, value v) {
     assert(value_type(p) == TYPE_CONS);
-    set_cdr(p, v);
+    set_cdr(alloc, p, v);
     return VALUE_NIL;
 }
 
@@ -306,33 +314,23 @@ tailcall_label:
 }
 
 value builtin_port(struct allocator *alloc, value v) {
-    return (value_type(v) == TYPE_PORT)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return value_is_port(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_input_port(struct allocator *alloc, value v) {
-    return port_in(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_in(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_output_port(struct allocator *alloc, value v) {
-    return port_out(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_out(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_text_port(struct allocator *alloc, value v) {
-    return port_text(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_text(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_binary_port(struct allocator *alloc, value v) {
-    return port_binary(v)
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return port_binary(v) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_write(struct allocator *alloc, value o, value p) {
@@ -359,9 +357,7 @@ value builtin_read(struct allocator *alloc, value p) {
 }
 
 value builtin_end_of_file(struct allocator *alloc, value v) {
-    return v == VALUE_EOF
-        ? VALUE_TRUE
-        : VALUE_FALSE;
+    return v == VALUE_EOF ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_mk_end_of_file(struct allocator *alloc) {
@@ -371,7 +367,7 @@ value builtin_mk_end_of_file(struct allocator *alloc) {
 value builtin_procedure(struct allocator *alloc, value v) {
     return ( (value_type(v) == TYPE_INTERP_LAMBDA)
              || (value_type(v) == TYPE_BUILTIN)
-             || (value_type(v) == TYPE_OTHER && value_subtype(v) == SUBTYPE_PARAM) )
+             || value_is_param(v) )
         ? VALUE_TRUE
         : VALUE_FALSE;
 }
@@ -379,6 +375,11 @@ value builtin_procedure(struct allocator *alloc, value v) {
 value builtin_compile_stub(struct allocator *alloc, value v) {
     // XXX warrants explanation
     return v;
+}
+
+value builtin_request_gc(struct allocator *alloc, value full) {
+    allocator_request_gc(alloc, full != VALUE_FALSE);
+    return VALUE_NIL;
 }
 
 value builtin_make_parameter(struct allocator *alloc, value i, value c) {
@@ -456,6 +457,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_procedure, "procedure?"));
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_make_parameter, "_make-parameter"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_compile_stub, "_compile"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_request_gc, "_request_gc"));
     // XXX probably should not be a built-in, but enables a good test case for
     // named let
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_quotient, "truncate-quotient"));

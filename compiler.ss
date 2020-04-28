@@ -1,6 +1,7 @@
 ; pre-compiler base env
 (define even?
     (lambda (arg)
+        ; XXX base on truncate-remainder instead, add odd?
         (eq? (* (/ arg 2) 2) arg)))
 
 (define zero?

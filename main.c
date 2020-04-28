@@ -22,19 +22,23 @@ static struct option long_options[] = {
     {"debug", no_argument, 0, 'd'},
     {"debug-compiler", no_argument, 0, 'D'},
     {"no-compiler", no_argument, 0, 'N'},
+    {"runtime-stats", no_argument, 0, 'r'},
     {"gc-threshold", required_argument, 0, 'g'},
+    {"major-gc-ratio", required_argument, 0, 'm'},
     {0, 0, 0, 0}
 };
 
 void usage(char *prog_name) {
     fprintf(stderr, "Usage: %s [options] [--] [script [arguments]]\n"
         "Options:\n"
-        "  --help -h -?         print this text\n"
-        "  --version -v         print the program version\n"
-        "  --debug -d           switch on code helpful in debug environments\n"
-        "  --debug-compiler -D  show input and output of compile stage\n"
-        "  --no-compiler -N     do not load compiler, bare interpreter\n"
-        "  --gc-threshold <int> set the threshold for GC pressure to specified number\n\n",
+        "  --help -h -?           print this text\n"
+        "  --version -v           print the program version\n"
+        "  --debug -d             switch on code helpful in debug environments\n"
+        "  --debug-compiler -D    show input and output of compile stage\n"
+        "  --no-compiler -N       do not load compiler, bare interpreter\n"
+        "  --runtime-stats -r     show runtime statistics\n"
+        "  --gc-threshold <int>   set the threshold for GC pressure to specified number\n"
+        "  --major-gc-ratio <int> set how often to do a full GC cycle [4]\n\n",
         prog_name);
 }
 
@@ -62,7 +66,6 @@ struct parser_cb_args {
     struct allocator *a;
 };
 
-// XXX with some of this in here, some configs may not be globals anymore
 static void parser_callback(value expr, void *arg) {
     struct parser_cb_args *pargs = (struct parser_cb_args*)arg;
     value comp_expr = make_cons(pargs->a, make_symbol(pargs->a, "quote"),
@@ -80,12 +83,10 @@ int main(int argc, char **argv) {
     bool load_compiler = true;
     char *script_file = NULL;
 
-    if (getenv("KEIRYAKU_GC_THRESHOLD")) {
-        arg_gc_threshold = atoi(getenv("KEIRYAKU_GC_THRESHOLD"));
-    }
+    long exec_start_us = currentmicros();
 
     while (1) {
-        c = getopt_long(argc, argv, "?hvdNDg:", long_options, NULL);
+        c = getopt_long(argc, argv, "?hvdDNrg:m:", long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -104,8 +105,14 @@ int main(int argc, char **argv) {
             case 'N':
                 load_compiler = false;
                 break;
+            case 'r':
+                arg_runtime_stats = true;
+                break;
             case 'g':
                 arg_gc_threshold = atoi(optarg);
+                break;
+            case 'm':
+                arg_major_gc_ratio = atoi(optarg);
                 break;
             case 'h':
             case '?':
@@ -122,6 +129,12 @@ int main(int argc, char **argv) {
         usage(argv[0]);
         return 1;
     }
+    if ((arg_major_gc_ratio < 1) || (arg_major_gc_ratio > 10)) {
+        fprintf(stderr, "argument --major-gc-ratio needs to be in the range [1..10]\n");
+        usage(argv[0]);
+        return 1;
+    }
+    // XXX verify gc_threshold
 
     for (; optind < argc; optind++) {
         // XXX currenty we only grab the first extra argument, need to work out
@@ -149,11 +162,12 @@ int main(int argc, char **argv) {
         arg_debug_compiler ? VALUE_TRUE : VALUE_FALSE);
 
     if (script_file) {
-        // script mode, load the file directly
+        // XXX why? stdin could still be a tty in script mode...
         env_bind(a, interp_top_env(i), 
             make_symbol(a, "stdin"),
             port_new(a, stdin, true, false, true, false));
 
+        // script mode, load the file directly
         if (load_compiler) {
             consume_file(p, "compiler.ss");
         }
@@ -183,6 +197,7 @@ int main(int argc, char **argv) {
     }
 
     if (arg_debug) {
+        allocator_request_gc(a, true);
         interp_gc(i);
     }
 
@@ -192,6 +207,13 @@ int main(int argc, char **argv) {
 
     if (history_file) {
         free(history_file);
+    }
+
+    if (arg_runtime_stats) {
+        long elapsed_us = currentmicros() - exec_start_us;
+        fprintf(stderr, "# total time elapsed: %7lius\n", elapsed_us);
+        fprintf(stderr, "# total GC time:      %7lius (%2.2f%%)\n", 
+            total_gc_time_us, 100.0 * total_gc_time_us / elapsed_us);
     }
 
     return 0;

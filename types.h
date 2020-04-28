@@ -17,12 +17,12 @@
  *
  * in the case of immediate values, the next 3 bits are used to determine the type
  * of the value: 
- *   000_ - integer
- *   001_ - float
- *   010_ - enumerated
+ *   000_ - enumerated
+ *   001_ - integer
+ *   010_ - float
  *   011_ - short symbol
  *   100_ - short string
- *   101_ - lookup vector
+ *   101_ - lookup vector`
  *
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
@@ -61,21 +61,20 @@
  *   100_ - interpreter lambda
  *   101_ - vector
  *   110_ - port
- *   111_ - other
+ *   111_ - boxed / other
  *
- * in the case of "other" non-immediates, the sub-type is stored on the heap as
+ * in the case of "boxed" non-immediates, the sub-type is stored on the heap as
  * well, in the first 8 bits. currently supported:
- *   00 - environment
- *   01 - parameter
+ *   000 - environment
+ *   001 - parameter
+ *   010 - port
+ *   011 - environment entry
+ *   100 - interpreter dynamic frames
  *
- * XXX will need boxes? they could be two-bit tagged immediates...
  *  */
 
 // XXX we have to make sure that we never have CONS entries that are empty,
-// otherwise we need to support EMPTY_LIST == CONS. this might mean we can get
-// rid of NIL as well
-
-// XXX clever restructuring of this could mean EMPTY_LIST = 0 
+// otherwise we need to support EMPTY_LIST == CONS.
 
 struct allocator;
 struct allocator_gc_ctx;
@@ -87,8 +86,8 @@ struct allocator_gc_ctx;
 typedef uint64_t value;
 
 #define value_is_immediate(x) (!((x) & 1))
-#define value_to_cell(x) (void*)((x) & ~15) // XXX should be called block?
-#define value_type(x) ((x) & 15) // XXX we need a subtype call too
+#define value_to_cell(x) (void*)((x) & ~15)
+#define value_type(x) ((x) & 15)
 #define value_subtype(x) (*(uint8_t*)(value_to_cell(x)))
 
 #define TYPE_ENUM             0b0000
@@ -104,14 +103,15 @@ typedef uint64_t value;
 #define TYPE_BUILTIN          0b0111
 #define TYPE_INTERP_LAMBDA    0b1001
 #define TYPE_VECTOR           0b1011
-#define TYPE_PORT             0b1101
-#define TYPE_OTHER            0b1111
+// unused                     0b1101
+#define TYPE_BOXED            0b1111
 
-#define SUBTYPE_ENV             0b00
-#define SUBTYPE_PARAM           0b01
+#define SUBTYPE_ENV            0b000
+#define SUBTYPE_PARAM          0b001
+#define SUBTYPE_PORT           0b010
+#define SUBTYPE_ENV_ENTRY      0b011
+#define SUBTYPE_DYN_FRAME      0b100
 
-// XXX we should not need a nil, but then we need to make sure there are no CONS
-// that are empty, they should all be EMPTY_LIST. then EMPTY_LIST could be == 0
 #define VALUE_NIL         0b00000000
 #define VALUE_TRUE        0b00100000
 #define VALUE_FALSE       0b01000000
@@ -133,14 +133,12 @@ typedef uint64_t value;
 
 #define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 
-// XXX we do not need this anymore, clean up
-#define value_is_true(x) ((x) != VALUE_FALSE)
+#define intval(x)           ((int32_t)((x) >> 32))
+#define make_int(a, x)      (((uint64_t)(x) << 32) | TYPE_INT)
 
-#define intval(x) ((int32_t)((x) >> 32))
-#define make_int(a, x) (((uint64_t)(x) << 32) | TYPE_INT)
 // XXX float are broken, need reinterpret_cast style casting
-#define floatval(x) ((float)((x) >> 32))
-#define make_float(a, x) (((uint64_t)(x) << 32) | TYPE_FLOAT)
+#define floatval(x)         ((float)((x) >> 32))
+#define make_float(a, x)    (((uint64_t)(x) << 32) | TYPE_FLOAT)
 
 /* Cons cells
  *
@@ -158,12 +156,12 @@ value make_cons(struct allocator *a, value car, value cdr);
 #define car(x) (((struct cons*)value_to_cell(x))->car)
 #define cdr(x) (((struct cons*)value_to_cell(x))->cdr)
 
-// retunr pointers to, this is required by GC to update for moved items
+// return pointers to, this is required by GC to update for moved items
 #define carptr(x) (&((struct cons*)value_to_cell(x))->car)
 #define cdrptr(x) (&((struct cons*)value_to_cell(x))->cdr)
 
-#define set_car(x, y) (((struct cons*)value_to_cell(x))->car = y)
-#define set_cdr(x, y) (((struct cons*)value_to_cell(x))->cdr = y)
+void set_car(struct allocator *a, value c, value n);
+void set_cdr(struct allocator *a, value c, value n);
 
 /* Symbols
  *
@@ -195,7 +193,6 @@ char* value_to_string(value *s);
  * every time they are evaluated, they are only evaluated once and then replaced
  * with a vector of two numbers: how many environments to move up, and how many
  * entries into that environment. */
-
 value make_lookup_vector(struct allocator *a, uint16_t envs, uint16_t entries);
 uint16_t lookup_vector_envs(value l);
 uint16_t lookup_vector_entries(value l);
@@ -254,9 +251,29 @@ void dump_string_value(value v, FILE *f);
 
 /* Environment references
  * */
+#define value_is_env(x) (   (value_type(x) == TYPE_BOXED) \
+                         && (value_subtype(x) == SUBTYPE_ENV))
+
 struct interp_env;
 value make_environment(struct allocator *a, struct interp_env *env);
 struct interp_env* value_to_environment(value v);
+
+#define value_is_env_entry(x) (   (value_type(x) == TYPE_BOXED) \
+                               && (value_subtype(x) == SUBTYPE_ENV_ENTRY))
+
+struct interp_env_entry;
+value make_env_entry(struct allocator *a, struct interp_env_entry *entry);
+struct interp_env_entry* value_to_env_entry(value v);
+
+/* Interpreter Dynamic Frames
+ * */
+
+#define value_is_dyn_frame(x) (   (value_type(x) == TYPE_BOXED) \
+                               && (value_subtype(x) == SUBTYPE_DYN_FRAME))
+
+struct dynamic_frame;
+value make_dyn_frame(struct allocator *a, struct dynamic_frame *df);
+struct dynamic_frame* value_to_dyn_frame(value v);
 
 /* Dynamic Bindings
  * */
@@ -264,6 +281,8 @@ struct param {
     value init;
     value convert;
 };
+
+#define value_is_param(x) ((value_type(x) == TYPE_BOXED) && (value_subtype(x) == SUBTYPE_PARAM))
 
 value make_parameter(struct allocator *a, value init, value convert);
 struct param* value_to_parameter(value v);

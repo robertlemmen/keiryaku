@@ -14,6 +14,16 @@ value make_cons(struct allocator *a, value car, value cdr) {
     return (uint64_t)cp | TYPE_CONS;
 }
 
+void set_car(struct allocator *a, value c, value n) {
+    ((struct cons*)value_to_cell(c))->car = n;
+    write_barrier(a, c, &((struct cons*)value_to_cell(c))->car);
+}
+
+void set_cdr(struct allocator *a, value c, value n) {
+    ((struct cons*)value_to_cell(c))->cdr = n;
+    write_barrier(a, c, &((struct cons*)value_to_cell(c))->cdr);
+}
+
 value make_symbol(struct allocator *a, char *s) {
     if (strlen(s) < 7) {
         value ret = 0;
@@ -44,7 +54,6 @@ char* value_to_symbol(value *s) {
     }
 }
 
-/* XXX same as above, refactor */
 value make_string(struct allocator *a, char *s) {
     if (strlen(s) < 7) {
         value ret = 0;
@@ -116,6 +125,8 @@ void dump_value(value v, FILE *f) {
                     break;
                 default:
                     fprintf(f, "<?enum %li>", v);
+            // XXX we should really have a type->string function to make this
+            // kind of output neater
                     //assert(0 && "unsupported enum value");
             }
             break;
@@ -131,7 +142,7 @@ void dump_value(value v, FILE *f) {
             fprintf(f, "(");
             if (1 || (car(v) != VALUE_NIL) || (cdr(v) != VALUE_NIL)) {
                 dump_value(car(v), f);
-                while (   (cdr(v) != VALUE_EMPTY_LIST) 
+                while (   (cdr(v) != VALUE_EMPTY_LIST)
                        && (cdr(v) != VALUE_NIL)
                        && (value_type(cdr(v)) == TYPE_CONS) ) {
                     fprintf(f, " ");
@@ -157,8 +168,14 @@ void dump_value(value v, FILE *f) {
             fprintf(f, ")");
             break;
         default:
-            fprintf(f, "<?type %li>", value_type(v));
-//            assert(0 && "unsupported value type");
+            // XXX we should really have a type->string function to make this
+            // kind of output neater
+            if (value_type(v) == TYPE_BOXED) {
+                fprintf(f, "<?type boxed 0x%X>", value_subtype(v));
+            }
+            else {
+                fprintf(f, "<?type 0x%lX>", value_type(v));
+            }
     }
     // XXX this isn't right, we should really check if this is a tty and then
     // add to linenoise rather than just print and flush
@@ -312,23 +329,40 @@ void traverse_vector(struct allocator_gc_ctx *gc, value v) {
     }
 }
 
-struct env_box {
-    uint8_t sub_type;
-    struct interp_env *env;
-};
-
 value make_environment(struct allocator *a, struct interp_env *env) {
-    struct env_box *ret = allocator_alloc(a, sizeof(struct env_box));
-    ret->sub_type = SUBTYPE_ENV;
-    ret->env = env;
-    return (uint64_t)ret | TYPE_OTHER;
+    assert(*(uint8_t*)env == SUBTYPE_ENV); // XXX we should have a reusable define for this
+    return (uint64_t)env | TYPE_BOXED;
 }
 
 struct interp_env* value_to_environment(value v) {
-    assert(value_type(v) == TYPE_OTHER);
-    struct env_box *box = (struct env_box*)value_to_cell(v);
-    assert(box->sub_type == SUBTYPE_ENV);
-    return box->env;
+    assert(value_type(v) == TYPE_BOXED);
+    struct interp_env *ret = value_to_cell(v);
+    assert(*(uint8_t*)ret == SUBTYPE_ENV);
+    return ret;
+}
+
+value make_env_entry(struct allocator *a, struct interp_env_entry *entry) {
+    assert(*(uint8_t*)entry == SUBTYPE_ENV_ENTRY);
+    return (uint64_t)entry | TYPE_BOXED;
+}
+
+struct interp_env_entry* value_to_env_entry(value v) {
+    assert(value_type(v) == TYPE_BOXED);
+    struct interp_env_entry *ret = value_to_cell(v);
+    assert(*(uint8_t*)ret == SUBTYPE_ENV_ENTRY);
+    return ret;
+}
+
+value make_dyn_frame(struct allocator *a, struct dynamic_frame *df) {
+    assert(*(uint8_t*)df == SUBTYPE_DYN_FRAME);
+    return (uint64_t)df | TYPE_BOXED;
+}
+
+struct dynamic_frame* value_to_dyn_frame(value v) {
+    assert(value_type(v) == TYPE_BOXED);
+    struct dynamic_frame *ret = value_to_cell(v);
+    assert(*(uint8_t*)ret == SUBTYPE_DYN_FRAME);
+    return ret;
 }
 
 struct param_box {
@@ -341,11 +375,11 @@ value make_parameter(struct allocator *a, value init, value convert) {
     ret->sub_type = SUBTYPE_PARAM;
     ret->param.init = init;
     ret->param.convert = convert;
-    return (uint64_t)ret | TYPE_OTHER;
+    return (uint64_t)ret | TYPE_BOXED;
 }
 
 struct param* value_to_parameter(value v) {
-    assert(value_type(v) == TYPE_OTHER);
+    assert(value_type(v) == TYPE_BOXED);
     struct param_box *box = (struct param_box*)value_to_cell(v);
     assert(box->sub_type == SUBTYPE_PARAM);
     return &box->param;
