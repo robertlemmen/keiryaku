@@ -25,18 +25,20 @@ static struct option long_options[] = {
     {"debug-compiler", no_argument, 0, 'D'},
     {"no-compiler", no_argument, 0, 'N'},
     {"gc-threshold", required_argument, 0, 'g'},
+    {"major-gc-ratio", required_argument, 0, 'm'},
     {0, 0, 0, 0}
 };
 
 void usage(char *prog_name) {
     fprintf(stderr, "Usage: %s [options] [--] [script [arguments]]\n"
         "Options:\n"
-        "  --help -h -?         print this text\n"
-        "  --version -v         print the program version\n"
-        "  --debug -d           switch on code helpful in debug environments\n"
-        "  --debug-compiler -D  show input and output of compile stage\n"
-        "  --no-compiler -N     do not load compiler, bare interpreter\n"
-        "  --gc-threshold <int> set the threshold for GC pressure to specified number\n\n",
+        "  --help -h -?           print this text\n"
+        "  --version -v           print the program version\n"
+        "  --debug -d             switch on code helpful in debug environments\n"
+        "  --debug-compiler -D    show input and output of compile stage\n"
+        "  --no-compiler -N       do not load compiler, bare interpreter\n"
+        "  --gc-threshold <int>   set the threshold for GC pressure to specified number\n"
+        "  --major-gc-ratio <int> set how often to do a full GC cycle\n\n",
         prog_name);
 }
 
@@ -64,7 +66,6 @@ struct parser_cb_args {
     struct allocator *a;
 };
 
-// XXX with some of this in here, some configs may not be globals anymore
 static void parser_callback(value expr, void *arg) {
     struct parser_cb_args *pargs = (struct parser_cb_args*)arg;
     value comp_expr = make_cons(pargs->a, make_symbol(pargs->a, "quote"),
@@ -84,11 +85,6 @@ int main(int argc, char **argv) {
 
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
-
-    // XXX this seems debug stuff from pre-optarg, remove?
-    if (getenv("KEIRYAKU_GC_THRESHOLD")) {
-        arg_gc_threshold = atoi(getenv("KEIRYAKU_GC_THRESHOLD"));
-    }
 
     while (1) {
         c = getopt_long(argc, argv, "?hvdNDg:", long_options, NULL);
@@ -113,6 +109,9 @@ int main(int argc, char **argv) {
             case 'g':
                 arg_gc_threshold = atoi(optarg);
                 break;
+            case 'm':
+                arg_major_gc_ratio = atoi(optarg);
+                break;
             case 'h':
             case '?':
                 usage(argv[0]);
@@ -128,6 +127,12 @@ int main(int argc, char **argv) {
         usage(argv[0]);
         return 1;
     }
+    if ((arg_major_gc_ratio < 1) || (arg_major_gc_ratio > 10)) {
+        fprintf(stderr, "argument --major-gc-ratio needs to be in the range [1..10]\n");
+        usage(argv[0]);
+        return 1;
+    }
+    // XXX verify gc_threshold
 
     for (; optind < argc; optind++) {
         // XXX currenty we only grab the first extra argument, need to work out

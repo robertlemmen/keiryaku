@@ -9,6 +9,7 @@
 // globals required for linking, but not by this test
 bool arg_debug = false;
 int arg_gc_threshold = 100000;
+int arg_major_gc_ratio = 2;
 
 struct interp_lambda {
 };

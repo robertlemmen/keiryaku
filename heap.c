@@ -38,9 +38,6 @@
 #define ARENA_TYPE_OLD_SURVIVOR     2
 #define ARENA_TYPE_TENURED          3
 
-// XXX make this configurable
-#define MAJOR_GC_FREQ               2
-
 // XXX it's more a stack really, so why call it a list?
 struct allocator_gc_list {
     union {
@@ -421,7 +418,7 @@ struct allocator_gc_ctx* allocator_gc_new(struct allocator *a) {
     struct allocator_gc_ctx *ret = malloc(sizeof(struct allocator_gc_ctx));
     ret->a = a;
     ret->list = new_gc_list(NULL);
-    ret->major_gc = ((a->gc_count % MAJOR_GC_FREQ) == 0) || (a->gc_requested_full);
+    ret->major_gc = ((a->gc_count % arg_major_gc_ratio) == 0) || (a->gc_requested_full);
     return ret;
 }
 
