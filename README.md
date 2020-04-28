@@ -6,11 +6,14 @@
 
 This is very incomplete, probably quite buggy and a toy anyway. That said:
 
-* Runs basic scheme code, e.g. all the samples from "The Little Schemer"
-* Direct interpreter, but with tail calls
+* Runs basic scheme code, e.g. all the samples from "The Little Schemer" and a
+  lot more
+* Direct interpreter in plain C, but with tail calls
 * Compiler stage implemented in scheme (very simple and ugly)
 * Precise and generational garbage collector (slow anyway)
-* Strings, vectors, booleans, 32-bit ints and floats 
+* Strings, vectors, booleans, 32-bit ints and floats
+* Short string and symbol optimisations to make them non-heap objects
+* Caching of symbol lookups
 * Dynamic bindings
 
 ## Roadmap

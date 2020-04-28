@@ -6,6 +6,7 @@
 #include <assert.h>
 
 #include "builtins.h"
+#include "global.h"
 #include "heap.h"
 
 // XXX could be more efficient structure rather than linked list, e.g. a list of
@@ -124,11 +125,14 @@ void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, val
     struct interp_env_entry *prev = NULL;
     value ee_v = env->first_entry_v;
 
+    allocator_unlock(alloc);
     while (ee_v != VALUE_NIL) {
         struct interp_env_entry *ee = value_to_env_entry(ee_v);
         assert(value_is_symbol(ee->name));
         if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
             ee->value = val;
+            write_barrier(alloc, ee_v, &ee->value);
+            allocator_lock(alloc);
             return;
         }
         prev = ee;
@@ -141,13 +145,17 @@ void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, val
     nee->value = val;
     if (prev) {
         prev->next_entry_v = make_env_entry(alloc, nee);
+        write_barrier(alloc, make_env_entry(alloc, prev), &prev->next_entry_v);
     }
     else {
         env->first_entry_v = make_env_entry(alloc, nee);
+        write_barrier(alloc, make_environment(alloc, env), &env->first_entry_v);
     }
+    allocator_lock(alloc);
 }
 
 // XXX doesn't this need a short symbol case?
+// actually it's the other way around, this is correct the other one is daft
 bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, value val) {
     assert(value_is_symbol(symbol));
 
@@ -158,6 +166,7 @@ bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, valu
             assert(value_is_symbol(ee->name));
             if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
                 ee->value = val;
+                write_barrier(alloc, ee_v, &ee->value);
                 return true;
             }
             ee_v = ee->next_entry_v;
@@ -351,7 +360,9 @@ tailcall_label:
             value lookup_vector;
             value ret = env_lookup(value_to_environment(f->env_v), f->expr, &lookup_vector);
             if (lookup_cons != VALUE_NIL) {
-                set_car(lookup_cons, lookup_vector);
+                allocator_unlock(i->alloc);
+                set_car(i->alloc, lookup_cons, lookup_vector);
+                allocator_lock(i->alloc);
             }
             return ret;
             break;
@@ -363,8 +374,7 @@ tailcall_label:
             // XXX only pass in vector thingie if car(f->expr) is some sort of
             // symbol, otherwise ((atom-to-function ...) replaces the lookup
             // with the last result
-            value cfe = car(f->expr);
-            value op = f->locals[0] = interp_eval_env(i, f, dyn_frame, cfe, value_to_environment(f->env_v), value_is_symbol(cfe) ? f->expr : VALUE_NIL);
+            value op = f->locals[0] = interp_eval_env(i, f, dyn_frame, car(f->expr), value_to_environment(f->env_v), value_is_symbol(car(f->expr)) ? f->expr : VALUE_NIL);
             if (op == VALUE_NIL) {
                 // XXX is this right? what if the cdr is set?
                 return VALUE_EMPTY_LIST;
@@ -575,10 +585,10 @@ tailcall_label:
                         break;
                     case VALUE_SP_EVAL:
                         arg_count = interp_collect_list(args, 2, &f->locals[1]);
-                        value eval_env_v = f->env_v; // XXX this needs to be in a local to protect against GC
+                        f->locals[3] = f->env_v; // XXX this needs to be in a local to protect against GC
                         if (arg_count == 2) {
                             // XXX what if this does not return an environment?
-                            eval_env_v = interp_eval_env(i, f, dyn_frame, f->locals[2], value_to_environment(f->env_v), VALUE_NIL);
+                            f->locals[3] = interp_eval_env(i, f, dyn_frame, f->locals[2], value_to_environment(f->env_v), VALUE_NIL);
                         }
                         else if (arg_count != 1) {
                             fprintf(stderr, "Arity error in application of special 'eval': expected 1 or 2 args but got %i\n",
@@ -586,7 +596,7 @@ tailcall_label:
                             return VALUE_NIL;
                         }
                         f->expr = interp_eval_env(i, f, dyn_frame, f->locals[1], value_to_environment(f->env_v), VALUE_NIL);
-                        f->env_v = eval_env_v;
+                        f->env_v = f->locals[3];
                         goto tailcall_label;
                         break;
                     case VALUE_SP_PARAM:
@@ -677,7 +687,7 @@ apply_eval_label:
                                 arg_list = temp;
                             }
                             else {
-                                set_cdr(current_arg, temp);
+                                set_cdr(i->alloc, current_arg, temp);
                             }
                             current_arg = temp;
                         }
@@ -741,7 +751,7 @@ apply_eval_label:
                                 arg_list = temp;
                             }
                             else {
-                                set_cdr(current_arg, temp);
+                                set_cdr(i->alloc, current_arg, temp);
                             }
                             current_arg = temp;
                         }
@@ -807,12 +817,14 @@ void interp_add_gc_root_frame(struct allocator_gc_ctx *gc, struct call_frame *f)
 }
 
 void interp_traverse_dynamic_frame(struct allocator_gc_ctx *gc, struct dynamic_frame *df) {
+    //fprintf(stderr, "traversing dyn_frame %p\n", df);
     allocator_gc_add_root_fp(gc, &df->param);
     allocator_gc_add_root_fp(gc, &df->val);
     allocator_gc_add_root_fp(gc, &df->outer_v);
 }
 
 void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l) {
+    //fprintf(stderr, "traversing lambda %p\n", l);
     allocator_gc_add_root_fp(gc, &l->body);
     allocator_gc_add_root_fp(gc, &l->env_v);
     for (int i = 0; i < l->arity; i++) {
@@ -821,21 +833,45 @@ void interp_traverse_lambda(struct allocator_gc_ctx *gc, struct interp_lambda *l
 }
 
 void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_entry *ee) {
+    //fprintf(stderr, "traversing env_entry %p\n", ee);
     allocator_gc_add_root_fp(gc, &ee->name);
     allocator_gc_add_root_fp(gc, &ee->value);
     allocator_gc_add_root_fp(gc, &ee->next_entry_v);
 }
 
 void interp_traverse_env(struct allocator_gc_ctx *gc, struct interp_env *env) {
+    //fprintf(stderr, "traversing env %p\n", (void*)make_environment(NULL, env));
+    //fprintf(stderr, "first_entry_v is %p\n", (void*)env->first_entry_v);
     allocator_gc_add_root_fp(gc, &env->first_entry_v);
+    //fprintf(stderr, "outer_v is %p\n", (void*)env->first_entry_v);
     allocator_gc_add_root_fp(gc, &env->outer_v);
 }
 
 void interp_gc(struct interp *i) {
+    allocator_unlock(i->alloc);
     struct allocator_gc_ctx *gc = allocator_gc_new(i->alloc);
+//    fprintf(stderr, "top_env_v is %p\n", (void*)i->top_env_v);
     allocator_gc_add_root_fp(gc, &i->top_env_v);
     allocator_gc_add_root_fp(gc, &i->current_dynamic_frame_v);
     interp_add_gc_root_frame(gc, i->current_frame);
 
     allocator_gc_perform(gc);
+
+    if (arg_debug) {
+        // stdout is the first entry in the top_env, so this will traverse
+        // pretty much the whole environment, exposing memory corruption earlier
+        value v = VALUE_NIL;
+        if (i->current_frame) {
+            v = env_lookup(value_to_environment(i->current_frame->env_v), 
+                make_symbol(i->alloc, "stdout"), NULL);
+        }
+        else {
+            v = env_lookup(value_to_environment(i->top_env_v), 
+                make_symbol(i->alloc, "stdout"), NULL);
+        }
+        assert(((value_type(v) == TYPE_BOXED) && (value_subtype(v) == SUBTYPE_PORT)));
+        // XXX we could also traverse more memory here, the call frames and even
+        // the expressions
+    }
+    allocator_lock(i->alloc);
 }

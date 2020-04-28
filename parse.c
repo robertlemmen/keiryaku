@@ -52,16 +52,16 @@ void parser_store_cell(struct parser *p, value cv) {
     struct expr_lnk *cl;
     if (p->exp_stack_top) {
         if (p->exp_stack_top->parse_pos == PP_CAR) {
-            set_car(p->exp_stack_top->content, cv);
+            set_car(p->alloc, p->exp_stack_top->content, cv);
             p->exp_stack_top->parse_pos = PP_MID;
         }
         else if (p->exp_stack_top->parse_pos == PP_CDR) {
-            set_cdr(p->exp_stack_top->content, cv);
+            set_cdr(p->alloc, p->exp_stack_top->content, cv);
             p->exp_stack_top->parse_pos = PP_DONE;
         }
         else if (p->exp_stack_top->parse_pos == PP_MID) {
             // short notation, create new cell in cdr and store in car of that
-            set_cdr(p->exp_stack_top->content, make_cons(p->alloc, cv, VALUE_EMPTY_LIST));
+            set_cdr(p->alloc, p->exp_stack_top->content, make_cons(p->alloc, cv, VALUE_EMPTY_LIST));
             cv = cdr(p->exp_stack_top->content);
             cl = malloc(sizeof(struct expr_lnk));
             cl->content = cv;
@@ -100,13 +100,13 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {
             cl = p->exp_stack_top;
             if (cl) {
                 if (cl->parse_pos == PP_MID) {
-                    set_cdr(p->exp_stack_top->content, VALUE_EMPTY_LIST);
+                    set_cdr(p->alloc, p->exp_stack_top->content, VALUE_EMPTY_LIST);
                 }
                 if ((car(cl->content) == VALUE_NIL) && (cdr(cl->content) == VALUE_NIL)) {
                     cl->content = VALUE_EMPTY_LIST;
                     if (cl->outer) {
                         if (cl->outer->parse_pos == PP_MID) {
-                            set_car(cl->outer->content, cl->content);
+                            set_car(p->alloc, cl->outer->content, cl->content);
                         }
                     }
                 }
@@ -496,6 +496,10 @@ struct parser* parser_new(struct allocator *alloc, void (*callback)(value exp, v
     ret->callback = callback;
     ret->cb_arg = cb_arg;
     return ret;
+}
+
+void parser_set_cb_arg(struct parser *p, void *cb_arg) {
+    p->cb_arg = cb_arg;
 }
 
 void parser_free(struct parser *p) {

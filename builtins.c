@@ -289,13 +289,13 @@ value builtin_boolean(struct allocator *alloc, value v) {
 
 value builtin_set_car(struct allocator *alloc, value p, value v) {
     assert(value_type(p) == TYPE_CONS);
-    set_car(p, v);
+    set_car(alloc, p, v);
     return VALUE_NIL;
 }
 
 value builtin_set_cdr(struct allocator *alloc, value p, value v) {
     assert(value_type(p) == TYPE_CONS);
-    set_cdr(p, v);
+    set_cdr(alloc, p, v);
     return VALUE_NIL;
 }
 

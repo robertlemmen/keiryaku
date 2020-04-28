@@ -85,6 +85,7 @@ int main(int argc, char **argv) {
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
 
+    // XXX this seems debug stuff from pre-optarg, remove?
     if (getenv("KEIRYAKU_GC_THRESHOLD")) {
         arg_gc_threshold = atoi(getenv("KEIRYAKU_GC_THRESHOLD"));
     }
@@ -154,11 +155,13 @@ int main(int argc, char **argv) {
         arg_debug_compiler ? VALUE_TRUE : VALUE_FALSE);
 
     if (script_file) {
-        // script mode, load the file directly
+        // XXX why? stdin could still be a tty in script mode...
         env_bind(a, interp_top_env(i), 
             make_symbol(a, "stdin"),
             port_new(a, stdin, true, false, true, false));
 
+        allocator_lock(a);
+        // script mode, load the file directly
         if (load_compiler) {
             consume_file(p, "compiler.ss");
         }
@@ -181,6 +184,7 @@ int main(int argc, char **argv) {
                 port_new(a, stdin, true, false, true, false));
         }
 
+        allocator_lock(a);
         if (load_compiler) {
             consume_file(p, "compiler.ss");
         }
@@ -192,6 +196,7 @@ int main(int argc, char **argv) {
         interp_gc(i);
     }
 
+    allocator_unlock(a);
     parser_free(p);
     interp_free(i);
     allocator_free(a);

@@ -88,17 +88,22 @@ void allocator_request_gc(struct allocator *a, bool full);
 struct allocator_gc_ctx;
 
 // XXX ugly! why do we have a cycle between this and types.h? eprhaps gc needs
-// to be in own file?
-
+// to be in own file? or just forward-define like the rest above?
 struct allocator_gc_ctx* allocator_gc_new(struct allocator *a);
 // this needs a pointer to a value as it needs to update the source if the item
 // did get moved. also note that you need to ensure that the passed value is a
-// non-immediate. you can use the _fp macro below for this
+// non-immediate. you msu call this through the _fp macro below which does a
+// precondition check
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, uint64_t *v);
 // fast-path macro that avoids calling _add_root() for non-immediates
-#define allocator_gc_add_root_fp(gc, v) if (!value_is_immediate(*v)) { allocator_gc_add_root(gc, v); }
+#define allocator_gc_add_root_fp(gc, v) if (!value_is_immediate(*v)) { \
+                                            allocator_gc_add_root(gc, v); }
+void write_barrier(struct allocator *a, uint64_t c, uint64_t *n);
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m);
 void allocator_gc_perform(struct allocator_gc_ctx *gc);
+
+void allocator_lock(struct allocator *a);
+void allocator_unlock(struct allocator *a);
 
 extern long total_gc_time_us;
 

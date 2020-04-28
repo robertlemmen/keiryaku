@@ -14,6 +14,16 @@ value make_cons(struct allocator *a, value car, value cdr) {
     return (uint64_t)cp | TYPE_CONS;
 }
 
+void set_car(struct allocator *a, value c, value n) {
+    ((struct cons*)value_to_cell(c))->car = n;
+    write_barrier(a, c, &((struct cons*)value_to_cell(c))->car);
+}
+
+void set_cdr(struct allocator *a, value c, value n) {
+    ((struct cons*)value_to_cell(c))->cdr = n;
+    write_barrier(a, c, &((struct cons*)value_to_cell(c))->cdr);
+}
+
 value make_symbol(struct allocator *a, char *s) {
     if (strlen(s) < 7) {
         value ret = 0;
@@ -115,6 +125,8 @@ void dump_value(value v, FILE *f) {
                     break;
                 default:
                     fprintf(f, "<?enum %li>", v);
+            // XXX we should really have a type->string function to make this
+            // kind of output neater
                     //assert(0 && "unsupported enum value");
             }
             break;
@@ -130,7 +142,7 @@ void dump_value(value v, FILE *f) {
             fprintf(f, "(");
             if (1 || (car(v) != VALUE_NIL) || (cdr(v) != VALUE_NIL)) {
                 dump_value(car(v), f);
-                while (   (cdr(v) != VALUE_EMPTY_LIST) 
+                while (   (cdr(v) != VALUE_EMPTY_LIST)
                        && (cdr(v) != VALUE_NIL)
                        && (value_type(cdr(v)) == TYPE_CONS) ) {
                     fprintf(f, " ");
@@ -156,8 +168,14 @@ void dump_value(value v, FILE *f) {
             fprintf(f, ")");
             break;
         default:
-            fprintf(f, "<?type %li>", value_type(v));
-//            assert(0 && "unsupported value type");
+            // XXX we should really have a type->string function to make this
+            // kind of output neater
+            if (value_type(v) == TYPE_BOXED) {
+                fprintf(f, "<?type boxed 0x%X>", value_subtype(v));
+            }
+            else {
+                fprintf(f, "<?type 0x%lX>", value_type(v));
+            }
     }
     // XXX this isn't right, we should really check if this is a tty and then
     // add to linenoise rather than just print and flush

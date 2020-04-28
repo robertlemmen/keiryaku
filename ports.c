@@ -12,7 +12,7 @@
 
 // XXX this is to make struct port a nice size, but there needs to be a better
 // way to achieve this
-#define BUFSIZE 464
+#define BUFSIZE 456
 
 struct result_list_entry {
     value result;
@@ -32,6 +32,7 @@ struct port {
     int buf_pos;
     FILE *file;
     struct parser *p;
+    struct allocator *a;
     /* we need to store the results from buffers pushed into the parser. most of
      * the time that is 0 or 1 expression, but it can be multiple. we do not
      * want to use a list all the time as it means allocations, so we have a
@@ -43,13 +44,18 @@ struct port {
 };
 
 static void parser_callback(value expr, void *arg) {
+    // XXX hmm, how does the pointer in the parser struct know the port hs
+    // moved??
     struct port *ps = (struct port*)arg;
+    //fprintf(stderr, "parser_callback %p\n", ps);
     if (ps->result == VALUE_NIL) {
         ps->result = expr;
+        write_barrier(ps->a, (uint64_t)ps | TYPE_BOXED, &ps->result);
     }
     else {
         struct result_list_entry *rle = malloc(sizeof(struct result_list_entry));
         rle->result = expr;
+        write_barrier(ps->a, (uint64_t)ps | TYPE_BOXED, &rle->result);
         rle->younger = NULL;
         if (ps->result_overflow_youngest) {
             ps->result_overflow_youngest->younger = rle;
@@ -72,9 +78,11 @@ value port_new(struct allocator *a, FILE *file, bool in, bool out, bool text, bo
     ps->buf_pos = 0;
     ps->file = file;
     ps->p = parser_new(a, &parser_callback, ps);
+    ps->a = a;
     ps->result = VALUE_NIL;
     ps->result_overflow_youngest = NULL;
     ps->result_overflow_oldest = NULL;
+    //fprintf(stderr, "new port allocated at %p\n", ps);
     return (uint64_t)ps | TYPE_BOXED;
 }
 
@@ -89,6 +97,7 @@ value port_new_tty(struct allocator *a) {
     ps->buf_pos = 0;
     ps->file = NULL;
     ps->p = parser_new(a, &parser_callback, ps);
+    ps->a = a;
     ps->result = VALUE_NIL;
     ps->result_overflow_youngest = NULL;
     ps->result_overflow_oldest = NULL;
@@ -103,6 +112,7 @@ value port_new_tty(struct allocator *a) {
     sprintf(history_file, "%s/.keiryaku_history", homedir);
     linenoiseHistoryLoad(history_file);
 
+    //fprintf(stderr, "new tty port allocated at %p\n", ps);
     return (uint64_t)ps | TYPE_BOXED;
 }
 
@@ -247,10 +257,15 @@ value port_read(value p) {
 void traverse_port(struct allocator_gc_ctx *gc, value p) {
     assert(value_is_port(p));
     struct port *ps = (struct port*)value_to_cell(p);
+    //fprintf(stderr, "traversing port %p\n", ps);
     allocator_gc_add_root_fp(gc, &ps->result);
     struct result_list_entry *rle = ps->result_overflow_oldest;
     while (rle) {
         allocator_gc_add_root_fp(gc, &rle->result);
         rle = rle->younger;
     }
+    // this is a bit interesting because this is not traversal following a link,
+    // but against the link: the parser needs to be updated when we move
+    // the port
+    parser_set_cb_arg(ps->p, ps); 
 }

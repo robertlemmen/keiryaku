@@ -161,8 +161,8 @@ value make_cons(struct allocator *a, value car, value cdr);
 #define carptr(x) (&((struct cons*)value_to_cell(x))->car)
 #define cdrptr(x) (&((struct cons*)value_to_cell(x))->cdr)
 
-#define set_car(x, y) (((struct cons*)value_to_cell(x))->car = y)
-#define set_cdr(x, y) (((struct cons*)value_to_cell(x))->cdr = y)
+void set_car(struct allocator *a, value c, value n);
+void set_cdr(struct allocator *a, value c, value n);
 
 /* Symbols
  *
