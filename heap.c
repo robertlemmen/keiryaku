@@ -796,6 +796,23 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
         // XXX what all of this is missing is some way to make sure _next and
         // _twice do not trace into an item not copied from survivor to tenured
         // we could just add them to the root set...
+
+        // XXX same as above, refactor
+        // splice _next onto _once.
+        // XXX could be more efficient
+        while (gc->a->remset_next->count) {
+            value cv = gc->a->remset_next->values[--gc->a->remset_next->count];
+            if ((!gc->a->remset_next->count) && (gc->a->remset_next->prev)) {
+                struct allocator_gc_list *temp = gc->a->remset_next;
+                gc->a->remset_next = temp->prev;
+                free(temp);
+            }
+            if (gc->a->remset_once->count == GC_LIST_SIZE) {
+                gc->a->remset_once = new_gc_list(gc->a->remset_once);
+            }
+            gc->a->remset_once->values[gc->a->remset_once->count] = cv;
+            gc->a->remset_once->count++;
+        }
     }
 
     // sweep tenured
