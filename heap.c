@@ -3,7 +3,6 @@
 #include <assert.h>
 #include <string.h>
 #include <stdlib.h>
-#include <time.h>
 // XXX for mprotect
 #include <sys/mman.h>
 
@@ -132,7 +131,6 @@ arena alloc_arena(struct allocator *a, uint8_t type) {
     ah->arena_type = type;
     ah->scan_cache = 1024; // first actual cell
 
-    //fprintf(stderr, "allocated a new arena at %p\n", ret);
     return ret;
 }
 
@@ -140,7 +138,6 @@ void free_arena(struct allocator *a, arena r) {
     assert(r != NULL);
     struct arena_header *ah = r;
     memset(r, 0x20 + ah->arena_type, ARENA_SIZE);
-    // XXX assert it is empty?
     free(r);
 }
 
@@ -148,8 +145,6 @@ void recycle_arena(struct allocator *a, arena r) {
     assert(r != NULL);
     struct arena_header *ah = r;
     memset(r, 0x30 + ah->arena_type, ARENA_SIZE);
-    // XXX assert it is empty?
-    //fprintf(stderr, "recycling an arena at %p\n", a);
     if (arg_debug) {
         assert(mprotect(r, ARENA_SIZE, PROT_NONE) == 0);
     }
@@ -191,7 +186,6 @@ block alloc_block_bump(arena a, int s) {
         memset(ret, 0x16, s);
     }
 
-    //fprintf(stderr, "allocated %p size %i in arena of type %i\n", ret, s, ah->arena_type);
     return ret;
 }
 
@@ -263,7 +257,6 @@ block alloc_block_tenured(arena a, int s) {
         memset(ret, 0x17, s);
     }
 
-    //fprintpf(stderr, "allocated %p size %i in arena of type %i\n", ret, s, ah->arena_type);
     return ret;
 }
 
@@ -313,30 +306,14 @@ void allocator_free(struct allocator *a) {
     }
 }
 
-// XXX debug stuff, remove
-int alloc_count_nursery = 0;
-int alloc_count_survivor = 0;
-int alloc_count_tenured = 0;
-
-void dump_clear_alloc_stats(void) {
-    fprintf(stderr, "#   nursery allocations:  %i\n", alloc_count_nursery);
-    fprintf(stderr, "#   survivor allocations: %i\n", alloc_count_survivor);
-    fprintf(stderr, "#   tenured allocations:  %i\n", alloc_count_tenured);
-    alloc_count_nursery = 0;
-    alloc_count_survivor = 0;
-    alloc_count_tenured = 0;
-}
-
 cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
     a->pressure++;
 
     if (type == ARENA_TYPE_TENURED) {
-        alloc_count_tenured++;
         arena current_arena = a->first_tenured;
         do {
             cell ret = alloc_block_tenured(current_arena, s);
             if (!ret) {
-    //            printf("arena 0x%016lX is full, trying next\n", current_arena);
                 // that arena is full, try the next one
                 struct arena_header *ah = current_arena;
                 if (!ah->next) {
@@ -363,11 +340,9 @@ cell allocator_alloc_type(struct allocator *a, int s, uint8_t type) {
     else {
         arena current_arena = NULL;
         if (type == ARENA_TYPE_NURSERY) {
-            alloc_count_nursery++;
             current_arena = a->first_nursery;
         }
         else if (type == ARENA_TYPE_NEW_SURVIVOR) {
-            alloc_count_survivor++;
             current_arena = a->first_survivor;
         }
         do {
@@ -424,28 +399,10 @@ struct allocator_gc_ctx* allocator_gc_new(struct allocator *a) {
 
 
 void allocator_gc_add_root(struct allocator_gc_ctx *gc, value *v) {
-    // XXX debug stuff: somehow I  got a root that isn't inside a real arena,
-    // leading to segfaults. inside the tracing it's too late to find out where
-    // it came from, so do the same work here to make it segfault earrlier a nd
-    // get a stacktrace
-    {
-            arena a = cell_to_arena(value_to_cell(*v));
-            uint_fast16_t cell_idx = cell_index(value_to_cell(*v));
-            if (!meta_get_block(a, cell_idx)) {
-                fprintf(stderr, "### traced into unallocated cell %p\n", (void*)*v);
-                fflush(stderr);
-            }
-            assert(cell_idx >= 1024);
-            assert(meta_get_block(a, cell_idx));
-    }
-
     struct arena_header *ah = cell_to_arena(*v);
     if ((!gc->major_gc) && (ah->arena_type == ARENA_TYPE_TENURED)) {
         // do not take tenured/old generation roots or heap items on minor
         // collections
-//        fprintf(stderr, "# skipping allocator_gc_add_root(..., %p) in traversal ", (void*)*v);
-        //dump_value(*v, stderr);
-//        fprintf(stderr, "\n");
         return;
     }
     if (gc->list->count == GC_LIST_SIZE) {
@@ -454,10 +411,6 @@ void allocator_gc_add_root(struct allocator_gc_ctx *gc, value *v) {
     gc->list->valueps[gc->list->count] = v;
     gc->list->count++;
 }
-
-// XXX we could mprotect unlock/lock all arenas before/after GC and in the few
-// cases where we actually want to write to them (set! etc). quite drastic, but
-// should expose more GC bugs...
 
 // XXX we could have a _fp macro that does the immediate check...
 // XXX and now we do not need a value pointer anymore for the youger arg, clean
@@ -471,14 +424,11 @@ void write_barrier(struct allocator *a, value c, value *n) {
             // we are gaining a reference from the tenured C to the younger-gen N,
             // so we need to record N for the next minor GCs as this goes against
             // the grain...
-   //         fprintf(stderr, "write barrier triggered for %p in container %p",
-   //             (void*)*n, (void*)c);
             if (a->remset_once->count == GC_LIST_SIZE) {
                 a->remset_once = new_gc_list(a->remset_once);
             }
             a->remset_once->values[a->remset_once->count] = c;
             a->remset_once->count++;
-   //         fprintf(stderr, ", remset_once");
             // references that go over two generations need to be handled the
             // next *two* collections
             if (nah->arena_type == ARENA_TYPE_NURSERY) {
@@ -487,9 +437,7 @@ void write_barrier(struct allocator *a, value c, value *n) {
                 }
                 a->remset_twice->values[a->remset_twice->count] = c;
                 a->remset_twice->count++;
-   //             fprintf(stderr, ", remset_twice");
             }
-   //         fprintf(stderr, "\n");
         }
         if (       (cah->arena_type == ARENA_TYPE_NEW_SURVIVOR)
                 && (nah->arena_type == ARENA_TYPE_NURSERY)) {
@@ -498,9 +446,6 @@ void write_barrier(struct allocator *a, value c, value *n) {
             }
             a->remset_next->values[a->remset_next->count] = c;
             a->remset_next->count++;
-   //         fprintf(stderr, "write barrier triggered for %p in container %p",
-   //             (void*)*n, (void*)c);
-   //         fprintf(stderr, ", remset_next\n");
         }
     }
 }
@@ -528,14 +473,6 @@ int next_arena_type(int at) {
             return 0;
     }
 }
-
-long currentmicros() {
-    struct timespec tp;
-    clock_gettime(CLOCK_MONOTONIC, &tp);
-    return tp.tv_sec * 1000000 + tp.tv_nsec / 1000;
-}
-
-long total_gc_time_us = 0;
 
 void traverse_heap_item(struct allocator_gc_ctx *gc, value cv) {
     switch (value_type(cv)) {
@@ -579,10 +516,11 @@ void traverse_heap_item(struct allocator_gc_ctx *gc, value cv) {
 }
 
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
-    fprintf(stderr, "# %s GC #%i after %i allocations (threshold %i)\n",
-        gc->major_gc ? "Major" : "Minor", gc->a->gc_count,
-        gc->a->pressure, arg_gc_threshold);
-    dump_clear_alloc_stats();
+    if (arg_runtime_stats) {
+        fprintf(stderr, "# %s GC #%i after %i allocations (threshold %i)\n",
+            gc->major_gc ? "Major" : "Minor", gc->a->gc_count,
+            gc->a->pressure, arg_gc_threshold);
+    }
     long mark_start = currentmicros();
 
     gc->a->gc_requested = false;
@@ -591,6 +529,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
 
     int visited = 0;
     int reclaimed = 0;
+    int promoted = 0;
 
     // turn all existing survivor arenas into ARENA_TYPE_OLD_SURVIVOR
     arena a = gc->a->first_survivor;
@@ -672,20 +611,12 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
             struct arena_header *ah = a;
             uint_fast16_t cell_idx = cell_index(value_to_cell(cv));
             assert(cell_idx >= 1024);
-            if (!meta_get_block(a, cell_idx)) {
-                fprintf(stderr, "### traced into unallocated cell %p\n", (void*)cv);
-                fflush(stderr);
-            }
             assert(meta_get_block(a, cell_idx));
             bool traverse = false;
             if (ah->arena_type == ARENA_TYPE_TENURED) {
                 if (!meta_get_mark(a, cell_idx)) {
                     meta_set_mark(a, cell_idx);
                     traverse = true;
-//                    printf("  marking in tenured\n");
-                }
-                else {
-//                    printf("  already marked in tenured\n");
                 }
             }
             else {
@@ -704,6 +635,7 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
                     cell newloc = allocator_alloc_type(gc->a, cc*16, next_arena_type(ah->arena_type));
                     cell oldloc = value_to_cell(cv);
                     memcpy(newloc, oldloc, cc*16);
+                    promoted++;
                     value nv = (uint64_t)newloc | value_type(cv);
                     //fprintf(stderr, "  moving heap item %p -> %p (arena type %i -> %i)\n",
                     //    (void*)cv, (void*)nv, ah->arena_type, next_arena_type(ah->arena_type));
@@ -890,14 +822,16 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     }
     long sweep_end = currentmicros();
 
-    fprintf(stderr, "#   %i heap items traced, %i reclaimed in tenured\n", visited, reclaimed);
-    fprintf(stderr, "# Finished %s GC with mark phase of %lius and sweep of %lius\n",
-        gc->major_gc ? "major" : "minor",
-        mark_end - mark_start, sweep_end - mark_end);
-    dump_clear_alloc_stats();
-    fprintf(stderr, "\n");
+    if (arg_runtime_stats) {
+        fprintf(stderr, "#   %i heap items traced, %i promoted, %i reclaimed in tenured\n", 
+            visited, promoted, reclaimed);
+        fprintf(stderr, "# Finished %s GC with mark phase of %lius and sweep of %lius\n",
+            gc->major_gc ? "major" : "minor",
+            mark_end - mark_start, sweep_end - mark_end);
+        fprintf(stderr, "\n");
 
-    total_gc_time_us += sweep_end - mark_start;
+        total_gc_time_us += sweep_end - mark_start;
+    }
 
     gc->a->pressure = 0;
     free(gc->list);
@@ -910,12 +844,4 @@ void mprot_arena_chain(arena a, int prot) {
         struct arena_header *ah = a;
         a = ah->next;
     }
-}
-
-void allocator_lock(struct allocator *a) {
-//    mprot_arena_chain(a->first_tenured, PROT_READ);
-}
-
-void allocator_unlock(struct allocator *a) {
-//    mprot_arena_chain(a->first_tenured, PROT_READ | PROT_WRITE);
 }

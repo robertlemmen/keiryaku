@@ -6,8 +6,6 @@
 #include <errno.h>
 #include <getopt.h>
 #include <pwd.h>
-// XXX just for the elapsed time
-#include <time.h>
 
 #include "heap.h"
 #include "parse.h"
@@ -24,6 +22,7 @@ static struct option long_options[] = {
     {"debug", no_argument, 0, 'd'},
     {"debug-compiler", no_argument, 0, 'D'},
     {"no-compiler", no_argument, 0, 'N'},
+    {"runtime-stats", no_argument, 0, 'r'},
     {"gc-threshold", required_argument, 0, 'g'},
     {"major-gc-ratio", required_argument, 0, 'm'},
     {0, 0, 0, 0}
@@ -37,8 +36,9 @@ void usage(char *prog_name) {
         "  --debug -d             switch on code helpful in debug environments\n"
         "  --debug-compiler -D    show input and output of compile stage\n"
         "  --no-compiler -N       do not load compiler, bare interpreter\n"
+        "  --runtime-stats -r     show runtime statistics\n"
         "  --gc-threshold <int>   set the threshold for GC pressure to specified number\n"
-        "  --major-gc-ratio <int> set how often to do a full GC cycle\n\n",
+        "  --major-gc-ratio <int> set how often to do a full GC cycle [4]\n\n",
         prog_name);
 }
 
@@ -83,11 +83,10 @@ int main(int argc, char **argv) {
     bool load_compiler = true;
     char *script_file = NULL;
 
-    struct timespec start, end;
-    clock_gettime(CLOCK_MONOTONIC, &start);
+    long exec_start_us = currentmicros();
 
     while (1) {
-        c = getopt_long(argc, argv, "?hvdNDg:", long_options, NULL);
+        c = getopt_long(argc, argv, "?hvdDNrg:m:", long_options, NULL);
         if (c == -1) {
             break;
         }
@@ -105,6 +104,9 @@ int main(int argc, char **argv) {
                 break;
             case 'N':
                 load_compiler = false;
+                break;
+            case 'r':
+                arg_runtime_stats = true;
                 break;
             case 'g':
                 arg_gc_threshold = atoi(optarg);
@@ -165,7 +167,6 @@ int main(int argc, char **argv) {
             make_symbol(a, "stdin"),
             port_new(a, stdin, true, false, true, false));
 
-        allocator_lock(a);
         // script mode, load the file directly
         if (load_compiler) {
             consume_file(p, "compiler.ss");
@@ -189,7 +190,6 @@ int main(int argc, char **argv) {
                 port_new(a, stdin, true, false, true, false));
         }
 
-        allocator_lock(a);
         if (load_compiler) {
             consume_file(p, "compiler.ss");
         }
@@ -201,7 +201,6 @@ int main(int argc, char **argv) {
         interp_gc(i);
     }
 
-    allocator_unlock(a);
     parser_free(p);
     interp_free(i);
     allocator_free(a);
@@ -210,11 +209,12 @@ int main(int argc, char **argv) {
         free(history_file);
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &end);
-    long elapsed_us =   (end.tv_sec * 1000000 + end.tv_nsec / 1000)
-                      - (start.tv_sec * 1000000 + start.tv_nsec / 1000);
-    fprintf(stderr, "# total elapsed: %7lius\n", elapsed_us);
-    fprintf(stderr, "# total GC time: %7lius\n", total_gc_time_us);
+    if (arg_runtime_stats) {
+        long elapsed_us = currentmicros() - exec_start_us;
+        fprintf(stderr, "# total time elapsed: %7lius\n", elapsed_us);
+        fprintf(stderr, "# total GC time:      %7lius (%2.2f%%)\n", 
+            total_gc_time_us, 100.0 * total_gc_time_us / elapsed_us);
+    }
 
     return 0;
 }

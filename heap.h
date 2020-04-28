@@ -102,9 +102,6 @@ void write_barrier(struct allocator *a, uint64_t c, uint64_t *n);
 void allocator_gc_add_nonval_root(struct allocator_gc_ctx *gc, void *m);
 void allocator_gc_perform(struct allocator_gc_ctx *gc);
 
-void allocator_lock(struct allocator *a);
-void allocator_unlock(struct allocator *a);
-
 extern long total_gc_time_us;
 
 #endif /* HEAP_H */
