@@ -32,10 +32,10 @@ struct parser {
 #define P_STRING    10
 #define P_EOF       11
 
-#define PP_CAR  0
-#define PP_MID  1
-#define PP_CDR  2
-#define PP_DONE 3
+#define PP_CAR      0
+#define PP_MID      1
+#define PP_CDR      2
+#define PP_DONE     3
 
 struct expr_lnk {
     value content;
@@ -45,6 +45,40 @@ struct expr_lnk {
     unsigned int bracket : 1;
     unsigned int parse_pos : 3;
 };
+
+void string_deescape(char *str, int len) {
+    char *loc = str;
+    while ((loc = strchr(loc, '\\')) != NULL) {
+        switch (*(loc+1)) {
+            case 'a':
+                *loc = '\a';
+                break;
+            case 'b':
+                *loc = '\b';
+                break;
+            case 't':
+                *loc = '\t';
+                break;
+            case 'n':
+                *loc = '\n';
+                break;
+            case 'r':
+                *loc = '\r';
+                break;
+            case '"':
+                *loc = '"';
+                break;
+            case '\\':
+                *loc = '\\';
+                break;
+            case '|':
+                *loc = '|';
+                break;
+        }
+        strncpy(loc + 1, loc + 2, len - 1);
+        loc++;
+    }
+}
 
 // store the passed value in the current position of the top element of 
 // the exp_stack
@@ -244,6 +278,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {
         p->callback(cv, p->cb_arg);
     }
 }
+
 /* the tokenizer takes in input string and tokenizes it, calling parse() for
  * each token. it is based on a simple state machine */
 #define S_INIT      0
@@ -254,6 +289,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {
 #define S_MINUS     5
 #define S_STRING    6
 #define S_HASHIDENT 7
+#define S_ESCAPE    8
 
 // XXX we should be able to treat things as ".+" as identifiers, see
 // 15-little-shadows.t
@@ -349,22 +385,23 @@ int parser_tokenize(struct parser *p, char *data) {
             }
         }
         else if (p->tokenizer_state == S_STRING) {
-            if (*cp == '"') {
+            if (*cp == '\\') {
+                p->tokenizer_state = S_ESCAPE;
+            }
+            else if (*cp == '"') {
                 p->tokenizer_state = S_INIT;
                 char *str = malloc(cp - mark);
                 strncpy(str, mark+1, cp - mark - 1);
                 str[cp - mark - 1] = '\0';
-                // XXX a hacky way to support a newline literal, this needs much
-                // more comprehensive escaping support
-                char *loc;
-                while ((loc = strstr(str, "\\n")) != NULL) {
-                    *loc = '\n';
-                    strncpy(loc + 1, loc + 2, cp - mark - 2);
-                }
+                string_deescape(str, cp - mark - 1);
                 parser_parse(p, P_STRING, 0, str);
                 free(str);
                 mark = NULL;
             }
+        }
+        else if (p->tokenizer_state == S_ESCAPE) {
+            // just read one char and fall back to string state
+            p->tokenizer_state = S_STRING;
         }
         else if (p->tokenizer_state == S_HASH) {
             if (*cp == '(') {

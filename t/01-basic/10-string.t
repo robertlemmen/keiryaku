@@ -8,6 +8,8 @@
 (string-length "1234567890")
 (string=? "ofenrohr" "ofenrohr")
 (string=? "" "test")
+"a\"b\tc\|d\\"
+"A\nB"
 ===
 ""
 "test"
@@ -19,4 +21,6 @@
 10
 #t
 #f
-
+"a"b	c|d\"
+"A
+B"
