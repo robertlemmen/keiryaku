@@ -26,7 +26,6 @@ technicalities
 
 memory management
 -----------------
-+ use word-sized unmarking
 - adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
 - clean up empty arenas at end, to find stuff that we failed to collect
 - destructor-on-gc e.g. for ports? kinda requires a second, dumber GC tracking

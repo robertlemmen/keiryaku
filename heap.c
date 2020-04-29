@@ -215,20 +215,23 @@ block alloc_block_tenured(arena a, int s) {
             return NULL;
         }
 
+        // do the acctual allocation
         meta_set_block(a, cell_idx);
         meta_clear_mark(a, cell_idx);
         for (int i = 1; i < cc; i++) {
             // block bit is already cleared
+            assert(!meta_get_block(a, cell_idx + i));
             meta_clear_mark(a, cell_idx + i);
         }
         ret = a + cell_idx * 16;
-
-        // we also need to check of the next cell after this allocation is
-        // an extent, and if so turn into a free cell
-        if (!meta_get_block(a, cell_idx + cc) && !meta_get_mark(a, cell_idx + cc)) {
-            meta_set_mark(a, cell_idx + cc);
-        }
     }
+
+    // we also need to check of the next cell after this allocation is
+    // an extent, and if so turn into a free cell
+    if (!meta_get_block(a, cell_idx + cc) && !meta_get_mark(a, cell_idx + cc)) {
+        meta_set_mark(a, cell_idx + cc);
+    }
+
     if (arg_debug) {
         memset(ret, 0x17, s);
     }
@@ -487,6 +490,28 @@ void traverse_heap_item(struct allocator_gc_ctx *gc, value cv) {
     }
 }
 
+void unmark_arena(arena a) {
+    for (int i = 16; i < 1024; i++) {
+        uint64_t *blockw = (uint64_t*)(a + i * sizeof(uint64_t));
+        uint64_t *markw = (uint64_t*)(a + BITMAP_SIZE + i * sizeof(uint64_t));
+        uint64_t mask = ~(*blockw & *markw);
+        *markw &= mask;
+    }
+}
+
+int sweep_arena(arena a) {
+    int reclaimed = 0;
+    for (int i = 16; i < 1024; i++) {
+        uint64_t *blockw = (uint64_t*)(a + i * sizeof(uint64_t));
+        uint64_t *markw = (uint64_t*)(a + BITMAP_SIZE + i * sizeof(uint64_t));
+        uint64_t mask = *blockw & ~(*markw);
+        *blockw &= ~mask;
+        *markw |= mask;
+        reclaimed += __builtin_popcountll(mask);
+    }
+    return reclaimed;
+}
+
 void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     if (arg_runtime_stats) {
         fprintf(stderr, "# %s GC #%i after %i allocations (threshold %i)\n",
@@ -717,58 +742,46 @@ void allocator_gc_perform(struct allocator_gc_ctx *gc) {
     a = gc->a->first_tenured;
     while (a) {
         if (gc->major_gc) {
-            // XXX of course we want to do this with word-sized manipulations, not
-            // looping
-            for (int i = 1024; i < 65535; i++) {
-                if (meta_get_block(a, i) && !meta_get_mark(a, i)) {
-                    reclaimed++;
-                    meta_clear_block(a, i);
-                    meta_set_mark(a, i);
-                    //fprintf(stderr, "reclaiming in tenured %p\n", cell_from_cell_index(a, i));
-                    // reclaim extent
-                    int j = i+1;
-                    while ((j != 0) && (!meta_get_block(a, j) && !meta_get_mark(a, j))) {
-                        meta_set_mark(a, j);
-                    }
-                    // XXX deal with subsequent extents
-                    if (arg_debug) {
+            if (arg_debug) {
+                // under --debug wee use a slow reclaiming method that allows us
+                // to determine the size of the block so it can be memset
+                for (int i = 1024; i < 65535; i++) {
+                    if (meta_get_block(a, i) && !meta_get_mark(a, i)) {
+                        reclaimed++;
+                        meta_clear_block(a, i);
+                        meta_set_mark(a, i);
+                        //fprintf(stderr, "reclaiming in tenured %p\n", cell_from_cell_index(a, i));
+                        // determine size of extent
+                        int j = 1;
+                        while (!meta_get_block(a, i+j) && !meta_get_mark(a, i+j)) {
+                            j++;
+                        }
                         void *cell = cell_from_cell_index(a, i);
                         assert(cell_to_arena(cell) == a);
                         assert(cell_index(cell) == i);
-                        memset(cell, 0x42, 16);
-                        // XXX also wipe extents
+                        memset(cell, 0x42, j*16);
                     }
                 }
             }
-            // XXX temp unmark, same as minor so move outside if/else
-            for (int i = 1024; i < 65535; i++) {
-                if (meta_get_block(a, i) && meta_get_mark(a, i)) {
-                    meta_clear_mark(a, i);
-                }
+            else {
+                reclaimed += sweep_arena(a);
             }
         }
         else {
-            // minor GC, just unmark
-            for (int i = 1024; i < 65535; i++) {
-                if (meta_get_block(a, i) && meta_get_mark(a, i)) {
-                    meta_clear_mark(a, i);
-                }
-            }
+            unmark_arena(a);
         }
+
         struct arena_header *ah = a;
-        // reset scan_cache, we can just set this as it is only a lower bound
         a = ah->next;
+
+        // reset scan_cache, we can just set this as it is only a lower bound
         ah->scan_cache = 1024;
     }
 
     // also unmark the survivor pages
     a = gc->a->first_survivor;
     while (a) {
-        for (int i = 1024; i < 65535; i++) {
-            if (meta_get_block(a, i) && meta_get_mark(a, i)) {
-                meta_clear_mark(a, i);
-            }
-        }
+        unmark_arena(a);
         struct arena_header *ah = a;
         a = ah->next;
     }
