@@ -3,9 +3,12 @@
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "interp.h"
 #include "ports.h"
+
+extern char **environ;
 
 value builtin_plus(struct allocator *alloc, value l) {
     int ret = 0;
@@ -382,6 +385,29 @@ value builtin_request_gc(struct allocator *alloc, value full) {
     return VALUE_NIL;
 }
 
+value builtin_getenvvar(struct allocator *alloc, value name) {
+    assert(value_is_string(name));
+    char *env_val = getenv(value_to_string(&name));
+    return env_val ? make_string(alloc, env_val) : VALUE_FALSE;
+}
+
+value builtin_getenvvars(struct allocator *alloc) {
+    char **env = environ;
+    int i = 0;
+    value env_list = VALUE_EMPTY_LIST;
+    while (env[i]) {
+        char *sep = strchr(env[i], '=');
+        if (sep) {
+            value name = make_stringn(alloc, env[i], sep-env[i]);
+            value envval = make_string(alloc, sep+1);
+            value env_pair = make_cons(alloc, name, envval);
+            env_list = make_cons(alloc, env_pair, env_list);
+        }
+        i++;
+    }
+    return env_list;
+}
+
 value builtin_make_parameter(struct allocator *alloc, value i, value c) {
     // XXX perhaps check that c is a procedure
     return make_parameter(alloc, i, c);
@@ -458,6 +484,8 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_make_parameter, "_make-parameter"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_compile_stub, "_compile"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_request_gc, "_request_gc"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_getenvvar, "get-environment-variable"));
+    bind_builtin_helper(alloc, env, make_builtin0(alloc, &builtin_getenvvars, "get-environment-variables"));
     // XXX probably should not be a built-in, but enables a good test case for
     // named let
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_quotient, "truncate-quotient"));

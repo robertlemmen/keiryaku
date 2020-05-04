@@ -182,6 +182,7 @@ char* value_to_symbol(value *s);
 #define value_is_string(x) ((value_type(x) == TYPE_SHORT_STRING) || (value_type(x) == TYPE_STRING))
 
 value make_string(struct allocator *a, char *s);
+value make_stringn(struct allocator *a, char *s, int n);
 /* weirdly we need to pass this by address due to the short string optimization.
  * also means that the caller has to be very careful as the value returned from
  * this does not outlive the value passed in! */

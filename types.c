@@ -70,6 +70,22 @@ value make_string(struct allocator *a, char *s) {
     }
 }
 
+value make_stringn(struct allocator *a, char *s, int n) {
+    if (n < 7) {
+        value ret = 0;
+        char *sr = (char*)&ret;
+        memcpy(&sr[1], s, n);
+        ret |= (n << 4) | TYPE_SHORT_STRING;
+        return ret;
+    }
+    else {
+        char *sp = allocator_alloc(a, n + 1);
+        strncpy(sp, s, n);
+        sp[n] = '\0';
+        return (uint64_t)sp | TYPE_STRING;
+    }
+}
+
 char* value_to_string(value *s) {
     assert(value_is_string(*s));
     if (value_type(*s) == TYPE_STRING) {
