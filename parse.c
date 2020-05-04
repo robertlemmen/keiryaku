@@ -112,7 +112,7 @@ void parser_store_cell(struct parser *p, value cv) {
     }
 }
 
-void parser_parse(struct parser *p, int tok, int num, char *str) {
+void parser_parse(struct parser *p, int tok, int64_t num, char *str) {
     value cv = VALUE_NIL;
     struct expr_lnk *cl;
     switch (tok) {
@@ -286,7 +286,7 @@ void parser_parse(struct parser *p, int tok, int num, char *str) {
 #define S_NUMBER    2
 #define S_IDENT     3
 #define S_HASH      4
-#define S_MINUS     5
+#define S_PLUSMINUS 5
 #define S_STRING    6
 #define S_HASHIDENT 7
 #define S_ESCAPE    8
@@ -338,9 +338,9 @@ int parser_tokenize(struct parser *p, char *data) {
                 mark = cp;
                 p->tokenizer_state = S_NUMBER;    
             }
-            else if (*cp == '-') {
+            else if ((*cp == '-') || (*cp == '+')) {
                 mark = cp;
-                p->tokenizer_state = S_MINUS;
+                p->tokenizer_state = S_PLUSMINUS;
             }
             else if (   (strchr("!$%&*/:<=>?^_~+", *cp) != NULL) 
                      || ((*cp >= 'a') && (*cp <= 'z')) 
@@ -378,7 +378,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 // end of number
                 p->tokenizer_state = S_INIT;
                 char *ep = cp-1;
-                int num_literal = strtol(mark, &ep, 10);
+                int64_t num_literal = strtoll(mark, &ep, 10);
                 parser_parse(p, P_NUMBER, num_literal, NULL);
                 cp--;
                 mark = NULL;
@@ -487,7 +487,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 mark = NULL;
             }
         }
-        else if (p->tokenizer_state == S_MINUS) {
+        else if (p->tokenizer_state == S_PLUSMINUS) {
             if ((*cp >= '0') && (*cp <= '9')) {
                 p->tokenizer_state = S_NUMBER;
             }

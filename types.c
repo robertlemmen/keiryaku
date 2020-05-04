@@ -118,7 +118,7 @@ uint16_t lookup_vector_entries(value l) {
 void dump_value(value v, FILE *f) {
     switch (value_type(v)) {
         case TYPE_INT:
-            fprintf(f, "%i", intval(v));
+            fprintf(f, "%li", intval(v));
             break;
         case TYPE_FLOAT:
             fprintf(f, "%f", floatval(v));

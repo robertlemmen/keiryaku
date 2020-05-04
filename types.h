@@ -2,6 +2,7 @@
 #define TYPES_H
 
 #include <stdint.h>
+#include <stdlib.h>
 // XXX just for dump_value below, which needs to move to ports
 #include <stdio.h>
 
@@ -83,6 +84,11 @@ struct allocator_gc_ctx;
 #error "This code targets 64-bit systems only"
 #endif
 
+// XXX this could be fixed easily, and then we could do either
+#if __BYTE_ORDER != __LITTLE_ENDIAN
+#error "This code targets little-endian systems only"
+#endif
+
 typedef uint64_t value;
 
 #define value_is_immediate(x) (!((x) & 1))
@@ -133,8 +139,16 @@ typedef uint64_t value;
 
 #define value_is_special(x) (((x) & 0b00011111) == 0b00010000)
 
-#define intval(x)           ((int32_t)((x) >> 32))
-#define make_int(a, x)      (((uint64_t)(x) << 32) | TYPE_INT)
+// this is a little bit slower than native integers, but they could only be
+// 32bits, and it's still a lot fasster than bignums. this gives us a range
+// of [36028797018963968, -36028797018963968]
+#define psignbit(x)         ((uint64_t)((x) < 0 ? 1 : 0) << 63)
+#define gsignbit(x)         ((uint64_t)(((x) >> 63) == 0 ? 1 : -1))
+
+#define intval(x)           ((int64_t)(((x) & 0x7fffffffffffffff) >> 4) \
+                                * gsignbit(x))
+#define	make_int(a, x)      ((uint64_t)(labs(x) << 4) \
+                                | psignbit(x) | TYPE_INT)
 
 // XXX float are broken, need reinterpret_cast style casting
 #define floatval(x)         ((float)((x) >> 32))

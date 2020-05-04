@@ -11,11 +11,11 @@
 extern char **environ;
 
 value builtin_plus(struct allocator *alloc, value l) {
-    int ret = 0;
+    int64_t ret = 0;
     while (value_type(l) == TYPE_CONS) {
         value num = car(l);
         assert(value_type(num) == TYPE_INT);
-        ret += intval(num);
+        ret += (int64_t)intval(num);
         l = cdr(l);    
     }
 
@@ -24,13 +24,13 @@ value builtin_plus(struct allocator *alloc, value l) {
 
 value builtin_minus(struct allocator *alloc, value l) {
     assert(value_type(l) == TYPE_CONS);
-    int ret = 0;
+    int64_t ret = 0;
     int count = 0;
     int first = 0;
     while (value_type(l) == TYPE_CONS) {
         value num = car(l);
         assert(value_type(num) == TYPE_INT);
-        ret -= intval(num);
+        ret -= (int64_t)intval(num);
         if (!count) {
             first = ret;
         }
@@ -44,11 +44,11 @@ value builtin_minus(struct allocator *alloc, value l) {
 }
 
 value builtin_mul(struct allocator *alloc, value l) {
-    int ret = 1;
+    int64_t ret = 1;
     while (value_type(l) == TYPE_CONS) {
         value num = car(l);
         assert(value_type(num) == TYPE_INT);
-        ret *= intval(num);
+        ret *= (int64_t)intval(num);
         l = cdr(l);    
     }
 
@@ -59,12 +59,12 @@ value builtin_div(struct allocator *alloc, value l) {
     // XXX arity-one case doesn't work with this logic, but we don't have
     // rationals anyway...
     assert(value_type(l) == TYPE_CONS);
-    int ret = intval(car(l));
+    int64_t ret = intval(car(l));
     l = cdr(l);    
     while (value_type(l) == TYPE_CONS) {
         value num = car(l);
         assert(value_type(num) == TYPE_INT);
-        ret /= intval(num);
+        ret /= (int64_t)intval(num);
         l = cdr(l);    
     }
 
@@ -75,44 +75,44 @@ value builtin_numeric_equals(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    return intval(a) == intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    return (int64_t)intval(a) == (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_lt(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    return intval(a) < intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    return (int64_t)intval(a) < (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_gt(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    return intval(a) > intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    return (int64_t)intval(a) > (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_le(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    return intval(a) <= intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    return (int64_t)intval(a) <= (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_ge(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    return intval(a) >= intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    return (int64_t)intval(a) >= (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
 }
 
 value builtin_expt(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    int result = 1;
-    int base = intval(a);
-    int exp = intval(b);
+    int64_t result = 1;
+    int64_t base = intval(a);
+    int64_t exp = intval(b);
     while (exp) {
         if (exp & 1) {
             result *= base;
@@ -417,14 +417,14 @@ value builtin_quotient(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    return make_int(alloc, intval(a) / intval(b));
+    return make_int(alloc, (int64_t)intval(a) / (int64_t)intval(b));
 }
 
 value builtin_remainder(struct allocator *alloc, value a, value b) {
     assert(value_type(a) == TYPE_INT);
     assert(value_type(b) == TYPE_INT);
 
-    return make_int(alloc, intval(a) % intval(b));
+    return make_int(alloc, (int64_t)intval(a) % (int64_t)intval(b));
 }
 
 void bind_builtin_helper(struct allocator *alloc, struct interp_env *env, value builtin) {

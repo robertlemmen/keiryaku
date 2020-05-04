@@ -11,7 +11,7 @@ This is very incomplete, probably quite buggy and a toy anyway. That said:
 * Direct interpreter in plain C, but with tail calls
 * Compiler stage implemented in scheme (very simple and ugly)
 * Precise and generational garbage collector (slow anyway)
-* Strings, vectors, booleans, 32-bit ints and floats
+* Strings, vectors, booleans, 55-bit ints (!) and 32-bit floats
 * Short string and symbol optimisations to make them non-heap objects
 * Caching of symbol lookups
 * Dynamic bindings
