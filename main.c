@@ -85,6 +85,9 @@ int main(int argc, char **argv) {
 
     long exec_start_us = currentmicros();
 
+    // we want "--" handling in getopt, so that we can cleanly pass arguments
+    // to the scheme program
+    setenv("POSIXLY_CORRECT", "1", 1);
     while (1) {
         c = getopt_long(argc, argv, "?hvdDNrg:m:", long_options, NULL);
         if (c == -1) {
@@ -136,14 +139,6 @@ int main(int argc, char **argv) {
     }
     // XXX verify gc_threshold
 
-    for (; optind < argc; optind++) {
-        // XXX currenty we only grab the first extra argument, need to work out
-        // how to pass more aguments to a scheme script
-        if (!script_file) {
-            script_file = argv[optind];
-        }
-    }
-
     struct allocator *a = allocator_new();
     struct interp *i = interp_new(a);
     struct parser_cb_args pargs;
@@ -151,6 +146,32 @@ int main(int argc, char **argv) {
     pargs.a = a;
     struct parser *p = parser_new(a, &parser_callback, &pargs);
 
+    // get the cmdline arguments and store them for the scheme program
+    value arg_list;
+    value arg_iter = VALUE_NIL;
+    for (; optind < argc; optind++) {
+        if (!script_file) {
+            script_file = argv[optind];
+        }
+        // also put all arguments into a list for the scheme program to use
+        value arg = make_cons(a, make_string(a, argv[optind]), VALUE_EMPTY_LIST);
+        if (arg_iter != VALUE_NIL) {
+            set_cdr(a, arg_iter, arg);
+            arg_iter = arg;
+        }
+        else {
+            arg_iter = arg;
+            arg_list = arg_iter;
+        }
+    }
+    if (arg_iter == VALUE_NIL) {
+        arg_list = make_cons(a, make_string(a, argv[0]), VALUE_EMPTY_LIST);
+    }
+    env_bind(a, interp_top_env(i),
+        make_symbol(a, "_cmdline"),
+        arg_list);
+
+    // create and bind standard ports
     env_bind(a, interp_top_env(i), 
         make_symbol(a, "stdout"),
         port_new(a, stdout, false, true, true, false));

@@ -1,56 +1,56 @@
 ; pre-compiler base env
 (define even?
-    (lambda (arg)
-        ; XXX base on truncate-remainder instead, add odd?
-        (eq? (* (/ arg 2) 2) arg)))
+  (lambda (arg)
+      ; XXX base on truncate-remainder instead, add odd?
+      (eq? (* (/ arg 2) 2) arg)))
 
 (define zero?
-    (lambda (n)
-        (eq? n 0)))
+  (lambda (n)
+      (eq? n 0)))
 
 (define caar
-    (lambda (arg)
-        (car (car arg))))
+  (lambda (arg)
+      (car (car arg))))
 
 (define cadr
-    (lambda (arg)
-        (car (cdr arg))))
+  (lambda (arg)
+      (car (cdr arg))))
 
 (define cdar
-    (lambda (arg)
-        (cdr (car arg))))
+  (lambda (arg)
+      (cdr (car arg))))
 
 (define cddr
-    (lambda (arg)
-        (cdr (cdr arg))))
+  (lambda (arg)
+      (cdr (cdr arg))))
 
 (define caaar
-    (lambda (arg)
-        (car (car (car arg)))))
+  (lambda (arg)
+      (car (car (car arg)))))
 
 (define caadr
-    (lambda (arg)
-        (car (car (cdr arg)))))
+  (lambda (arg)
+      (car (car (cdr arg)))))
 
 (define cadar
-    (lambda (arg)
-        (car (cdr (car arg)))))
+  (lambda (arg)
+      (car (cdr (car arg)))))
 
 (define caddr
-    (lambda (arg)
-        (car (cdr (cdr arg)))))
+  (lambda (arg)
+      (car (cdr (cdr arg)))))
 
 (define cdaar
-    (lambda (arg)
-        (cdr (car (car arg)))))
+  (lambda (arg)
+      (cdr (car (car arg)))))
 
 (define cdadr
-    (lambda (arg)
-        (cdr (car (cdr arg)))))
+  (lambda (arg)
+      (cdr (car (cdr arg)))))
 
 (define cddar
-    (lambda (arg)
-        (cdr (cdr (car arg)))))
+  (lambda (arg)
+      (cdr (cdr (car arg)))))
 
 (define cdddr
     (lambda (arg)
@@ -491,3 +491,8 @@
   (lambda port
     (write-string "\n" (if (null? port) stdout (car port)))))
 
+; XXX why can I not define a lambda without args? seems like a lambda compiler
+; bug
+(define command-line
+  (lambda p
+    _cmdline))

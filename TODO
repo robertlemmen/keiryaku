@@ -24,6 +24,10 @@ technicalities
   call graphs
 - double-check that simple tail recursions can actually be done in bound memory
 
+bugs
+----
++ lambdas without args do not work, compilerbug? (define test (lambda () 23))
+
 memory management
 -----------------
 - adopt a gc bench program like this https://www.hboehm.info/gc/gc_bench/GCBench.scheme
