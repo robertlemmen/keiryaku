@@ -244,7 +244,7 @@ value builtin_symbol_eq(struct allocator *alloc, value a, value b) {
     if (a == b) {
         return VALUE_TRUE;
     }
-    return (strcmp(value_to_string(&a), value_to_string(&b)) == 0)
+    return (strcmp(value_to_symbol(&a), value_to_symbol(&b)) == 0)
         ? VALUE_TRUE
         : VALUE_FALSE;
     // XXX we could possibly use the comparison to slowly make all equivalent
@@ -252,6 +252,16 @@ value builtin_symbol_eq(struct allocator *alloc, value a, value b) {
     // when creating the symbol in the first place? It is also unclear whether
     // it would ever help, or whether we copy the value before comparing and
     // therefore loosing the original location
+}
+
+value builtin_symbol_to_string(struct allocator *alloc, value s) {
+    assert(value_is_symbol(s));
+    return make_string(alloc, value_to_symbol(&s));
+}
+
+value builtin_string_to_symbol(struct allocator *alloc, value s) {
+    assert(value_is_string(s));
+    return make_symbol(alloc, value_to_string(&s));
 }
 
 // XXX we need a compiler transfrom to support (make-vector 12) without "fill"
@@ -459,6 +469,8 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_string_length, "string-length"));
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_string_eq, "string=?"));
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_symbol_eq, "symbol=?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_symbol_to_string, "symbol->string"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_string_to_symbol, "string->symbol"));
     bind_builtin_helper(alloc, env, make_builtin2(alloc, &builtin_make_vector, "make-vector"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_vector, "vector?"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_vector_length, "vector-length"));
