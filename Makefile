@@ -1,4 +1,5 @@
 CFLAGS ?= -std=c11 -D_GNU_SOURCE -pthread -fPIC -Wall -g
+LDFLAGS ?= -lm
 CC := gcc
 TARGET := keiryaku
 
@@ -31,31 +32,40 @@ linenoise.o: linenoise/linenoise.c
 test: $(TARGET)
 	@$(MAKE) --no-print-directory -C check
 	@echo
-	@echo "Running Contract Tests..."
+	@echo "Running Scheme Tests..."
 	@tdir=`mktemp -d`; \
 	failed_count=0; \
+	total_count=0; \
 	for tf in $$(find t -name "*.t" | sort); do \
 		[ -e "$$tf" ] || continue; \
 		echo "  $$tf ..."; \
+		total_count=`expr $$total_count + 1`; \
 		cat $$tf | grep -v "^;" | sed '1,/===/d' > $$tdir/expected; \
 		cat $$tf | grep -v "^;" | sed '/===/,$$d' | ./$(TARGET) --debug > $$tdir/result; \
-		diff -uB $$tdir/expected /$$tdir/result > $$tdir/diff || true; \
-		if [ -s $$tdir/diff ]; then \
+		if [ $$? -ne 0 ]; then \
 			echo; \
-			echo "difference in test $$tf:"; \
-			cat $$tdir/diff; \
+			echo "test failed to execute: $$tf"; \
 			echo; \
 			failed_count=`expr $$failed_count + 1`; \
+		else \
+			diff -uB $$tdir/expected /$$tdir/result > $$tdir/diff || true; \
+			if [ -s $$tdir/diff ]; then \
+				echo; \
+				echo "difference in test $$tf:"; \
+				cat $$tdir/diff; \
+				echo; \
+				failed_count=`expr $$failed_count + 1`; \
+			fi; \
 		fi; \
 		rm -f $$tdir/expected $$tdir/result $$tdir/diff; \
 	done; \
 	rm -rf $$tdir; \
 	if [ $$failed_count -gt 0 ]; then \
 		echo; \
-		echo "$$failed_count tests failed!"; \
+		echo "$$failed_count / $$total_count tests failed!"; \
 		exit 1; \
 	fi; \
-	echo "all ok!"
+	echo "all $$total_count tests passed ok!"
 
 clean:
 	@echo "Cleaning..."

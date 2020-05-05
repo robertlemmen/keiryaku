@@ -19,23 +19,24 @@ struct parser {
 };
 
 /* more parser states means you need to widen the field in expr_lnk below! */
-#define P_LPAREN    0
-#define P_RPAREN    1
-#define P_LBRACKET  2
-#define P_RBRACKET  3
-#define P_NUMBER    4
-#define P_DOT       5
-#define P_IDENT     6
-#define P_BOOL      7
-#define P_QUOTE     8
-#define P_VECTOR    9
-#define P_STRING    10
-#define P_EOF       11
+#define P_LPAREN     0
+#define P_RPAREN     1
+#define P_LBRACKET   2
+#define P_RBRACKET   3
+#define P_INTNUM     4
+#define P_FLONUM     5
+#define P_DOT        6
+#define P_IDENT      7
+#define P_BOOL       8
+#define P_QUOTE      9
+#define P_VECTOR    10
+#define P_STRING    11
+#define P_EOF       12
 
-#define PP_CAR      0
-#define PP_MID      1
-#define PP_CDR      2
-#define PP_DONE     3
+#define PP_CAR       0
+#define PP_MID       1
+#define PP_CDR       2
+#define PP_DONE      3
 
 struct expr_lnk {
     value content;
@@ -80,7 +81,7 @@ void string_deescape(char *str, int len) {
     }
 }
 
-// store the passed value in the current position of the top element of 
+// store the passed value in the current position of the top element of
 // the exp_stack
 void parser_store_cell(struct parser *p, value cv) {
     struct expr_lnk *cl;
@@ -112,7 +113,7 @@ void parser_store_cell(struct parser *p, value cv) {
     }
 }
 
-void parser_parse(struct parser *p, int tok, int64_t num, char *str) {
+void parser_parse(struct parser *p, int tok, int64_t inum, double fnum, char *str) {
     value cv = VALUE_NIL;
     struct expr_lnk *cl;
     switch (tok) {
@@ -170,8 +171,21 @@ void parser_parse(struct parser *p, int tok, int64_t num, char *str) {
             }
             p->exp_stack_top = cl;
             break;
-        case P_NUMBER:
-            cv = make_int(p->alloc, num);
+        case P_INTNUM:
+            cv = make_int(p->alloc, inum);
+            parser_store_cell(p, cv);
+            // also reduce quote expressions on the stack
+            cl = p->exp_stack_top;
+            while (cl && cl->quote) {
+                cv = cl->content;
+                struct expr_lnk *tmp = cl;
+                cl = cl->outer;
+                free(tmp);
+            }
+            p->exp_stack_top = cl;
+            break;
+        case P_FLONUM:
+            cv = make_float(p->alloc, fnum);
             parser_store_cell(p, cv);
             // also reduce quote expressions on the stack
             cl = p->exp_stack_top;
@@ -184,7 +198,7 @@ void parser_parse(struct parser *p, int tok, int64_t num, char *str) {
             p->exp_stack_top = cl;
             break;
         case P_BOOL:
-            cv = num ? VALUE_TRUE : VALUE_FALSE;
+            cv = inum ? VALUE_TRUE : VALUE_FALSE;
             parser_store_cell(p, cv);
             // also reduce quote expressions on the stack
             // XXX in three places, refactor
@@ -281,22 +295,26 @@ void parser_parse(struct parser *p, int tok, int64_t num, char *str) {
 
 /* the tokenizer takes in input string and tokenizes it, calling parse() for
  * each token. it is based on a simple state machine */
-#define S_INIT      0
-#define S_COMMENT   1
-#define S_NUMBER    2
-#define S_IDENT     3
-#define S_HASH      4
-#define S_PLUSMINUS 5
-#define S_STRING    6
-#define S_HASHIDENT 7
-#define S_ESCAPE    8
+#define S_INIT       0
+#define S_COMMENT    1
+#define S_INTNUM     2
+#define S_FLONUM     3
+#define S_IDENT      4
+#define S_HASH       5
+#define S_PLUSMINUS  6
+#define S_STRING     7
+#define S_HASHIDENT  8
+#define S_ESCAPE     9
+#define S_DOT       10
 
 // XXX we should be able to treat things as ".+" as identifiers, see
 // 15-little-shadows.t
 int parser_tokenize(struct parser *p, char *data) {
     char *cp = data;
     char *mark = NULL;
-    if ((p->tokenizer_state == S_IDENT) || (p->tokenizer_state == S_NUMBER)) {
+    if (       (p->tokenizer_state == S_IDENT)
+            || (p->tokenizer_state == S_INTNUM)
+            || (p->tokenizer_state == S_FLONUM)) {
         mark = data;
     }
     // read the data char-by-char
@@ -306,19 +324,19 @@ int parser_tokenize(struct parser *p, char *data) {
                 // ignore whitespace
             }
             else if (*cp == '(') {
-                parser_parse(p, P_LPAREN, 0, NULL);
+                parser_parse(p, P_LPAREN, 0, 0.0, NULL);
             }
             else if (*cp == ')') {
-                parser_parse(p, P_RPAREN, 0, NULL);
+                parser_parse(p, P_RPAREN, 0, 0.0, NULL);
             }
             else if (*cp == '[') {
-                parser_parse(p, P_LBRACKET, 0, NULL);
+                parser_parse(p, P_LBRACKET, 0, 0.0, NULL);
             }
             else if (*cp == ']') {
-                parser_parse(p, P_RBRACKET, 0, NULL);
+                parser_parse(p, P_RBRACKET, 0, 0.0, NULL);
             }
             else if (*cp == '\'') {
-                parser_parse(p, P_QUOTE, 0, NULL);
+                parser_parse(p, P_QUOTE, 0, 0.0, NULL);
             }
             else if (*cp == ';') {
                 p->tokenizer_state = S_COMMENT;
@@ -332,25 +350,26 @@ int parser_tokenize(struct parser *p, char *data) {
                 p->tokenizer_state = S_STRING;
             }
             else if (*cp == '.') {
-                parser_parse(p, P_DOT, 0, NULL);
+                mark = cp;
+                p->tokenizer_state = S_DOT;
             }
             else if ((*cp >= '0') && (*cp <= '9')) {
                 mark = cp;
-                p->tokenizer_state = S_NUMBER;    
+                p->tokenizer_state = S_INTNUM;
             }
             else if ((*cp == '-') || (*cp == '+')) {
                 mark = cp;
                 p->tokenizer_state = S_PLUSMINUS;
             }
-            else if (   (strchr("!$%&*/:<=>?^_~+", *cp) != NULL) 
-                     || ((*cp >= 'a') && (*cp <= 'z')) 
+            else if (   (strchr("!$%&*/:<=>?^_~+", *cp) != NULL)
+                     || ((*cp >= 'a') && (*cp <= 'z'))
                      || ((*cp >= 'A') && (*cp <= 'Z')) ) {
                 mark = cp;
                 p->tokenizer_state = S_IDENT;
             }
             else {
-                fprintf(stderr, 
-                    "Unexpected character '%c' in tokenizer state: %i\n", 
+                fprintf(stderr,
+                    "Unexpected character '%c' in tokenizer state: %i\n",
                     *cp, p->tokenizer_state);
                 exit(1);
             }
@@ -363,14 +382,17 @@ int parser_tokenize(struct parser *p, char *data) {
                 // comment, ignore
             }
         }
-        else if (p->tokenizer_state == S_NUMBER) {
+        else if (p->tokenizer_state == S_INTNUM) {
             if ((*cp >= '0') && (*cp <= '9')) {
                 // still in number
             }
-            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
-                || ((*cp >= 'a') && (*cp <= 'z')) 
-                || ((*cp >= '0') && (*cp <= '9')) 
-                || ((*cp >= 'A') && (*cp <= 'Z')) 
+            else if (*cp == '.') {
+                p->tokenizer_state = S_FLONUM;
+            }
+            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL)
+                || ((*cp >= 'a') && (*cp <= 'z'))
+                || ((*cp >= '0') && (*cp <= '9'))
+                || ((*cp >= 'A') && (*cp <= 'Z'))
                 || (strchr("+-.@", *cp) != NULL) ) {
                 p->tokenizer_state = S_IDENT;
             }
@@ -379,7 +401,36 @@ int parser_tokenize(struct parser *p, char *data) {
                 p->tokenizer_state = S_INIT;
                 char *ep = cp-1;
                 int64_t num_literal = strtoll(mark, &ep, 10);
-                parser_parse(p, P_NUMBER, num_literal, NULL);
+                parser_parse(p, P_INTNUM, num_literal, 0.0, NULL);
+                cp--;
+                mark = NULL;
+            }
+        }
+        else if (p->tokenizer_state == S_DOT) {
+            if ((*cp >= '0') && (*cp <= '9')) {
+                p->tokenizer_state = S_FLONUM;
+            }
+            // XXX could switch to ident in some cases?
+            else {
+                // it was just a dot after all
+                p->tokenizer_state = S_INIT;
+                char *ep = cp-1;
+                float num_literal = strtof(mark, &ep);
+                parser_parse(p, P_DOT, 0, 0.0, NULL);
+                cp--;
+                mark = NULL;
+            }
+        }
+        else if (p->tokenizer_state == S_FLONUM) {
+            if ((*cp >= '0') && (*cp <= '9')) {
+                // still in float
+            }
+            else {
+                // end of float
+                p->tokenizer_state = S_INIT;
+                char *ep = cp-1;
+                float num_literal = strtof(mark, &ep);
+                parser_parse(p, P_FLONUM, 0, num_literal, NULL);
                 cp--;
                 mark = NULL;
             }
@@ -394,7 +445,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 strncpy(str, mark+1, cp - mark - 1);
                 str[cp - mark - 1] = '\0';
                 string_deescape(str, cp - mark - 1);
-                parser_parse(p, P_STRING, 0, str);
+                parser_parse(p, P_STRING, 0, 0.0, str);
                 free(str);
                 mark = NULL;
             }
@@ -405,7 +456,7 @@ int parser_tokenize(struct parser *p, char *data) {
         }
         else if (p->tokenizer_state == S_HASH) {
             if (*cp == '(') {
-                parser_parse(p, P_VECTOR, 0, NULL);
+                parser_parse(p, P_VECTOR, 0, 0.0, NULL);
                 p->tokenizer_state = S_INIT;
             }
             else if (*cp == '!') {
@@ -414,24 +465,24 @@ int parser_tokenize(struct parser *p, char *data) {
                 // beginning of the file...
                 p->tokenizer_state = S_COMMENT;
             }
-            else if (   (strchr("!$%&*/:<=>?^_~+", *cp) != NULL) 
-                     || ((*cp >= 'a') && (*cp <= 'z')) 
+            else if (   (strchr("!$%&*/:<=>?^_~+", *cp) != NULL)
+                     || ((*cp >= 'a') && (*cp <= 'z'))
                      || ((*cp >= 'A') && (*cp <= 'Z')) ) {
                 mark = cp;
                 p->tokenizer_state = S_HASHIDENT;
             }
             else {
-                fprintf(stderr, 
-                    "Unexpected character '%c' in tokenizer state: %i\n", 
+                fprintf(stderr,
+                    "Unexpected character '%c' in tokenizer state: %i\n",
                     *cp, p->tokenizer_state);
                 exit(1);
             }
         }
         else if (p->tokenizer_state == S_IDENT) {
-            if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
-                || ((*cp >= 'a') && (*cp <= 'z')) 
-                || ((*cp >= '0') && (*cp <= '9')) 
-                || ((*cp >= 'A') && (*cp <= 'Z')) 
+            if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL)
+                || ((*cp >= 'a') && (*cp <= 'z'))
+                || ((*cp >= '0') && (*cp <= '9'))
+                || ((*cp >= 'A') && (*cp <= 'Z'))
                 || (strchr("+-.@", *cp) != NULL) ) {
                 // still in identifier
             }
@@ -443,41 +494,41 @@ int parser_tokenize(struct parser *p, char *data) {
                 char *str = malloc(cp - mark + 1);
                 strncpy(str, mark, cp - mark);
                 str[cp - mark] = '\0';
-                parser_parse(p, P_IDENT, 0, str);
+                parser_parse(p, P_IDENT, 0, 0.0, str);
                 free(str);
                 cp--;
                 mark = NULL;
             }
         }
         else if (p->tokenizer_state == S_HASHIDENT) {
-            if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
-                || ((*cp >= 'a') && (*cp <= 'z')) 
-                || ((*cp >= '0') && (*cp <= '9')) 
-                || ((*cp >= 'A') && (*cp <= 'Z')) 
+            if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL)
+                || ((*cp >= 'a') && (*cp <= 'z'))
+                || ((*cp >= '0') && (*cp <= '9'))
+                || ((*cp >= 'A') && (*cp <= 'Z'))
                 || (strchr("+-.@", *cp) != NULL) ) {
                 // still in hash identifier
             }
             else {
                 // end of identifier
                 if (((cp - mark) == 1) && (mark[0] == 't')) {
-                    parser_parse(p, P_BOOL, 1, NULL);
+                    parser_parse(p, P_BOOL, 1, 0.0, NULL);
                 }
                 else if (((cp - mark) == 1) && (mark[0] == 'f')) {
-                    parser_parse(p, P_BOOL, 0, NULL);
+                    parser_parse(p, P_BOOL, 0, 0.0, NULL);
                 }
                 else if (((cp - mark) == 4) && (strncmp(mark, "true", 4) == 0)) {
-                    parser_parse(p, P_BOOL, 1, NULL);
+                    parser_parse(p, P_BOOL, 1, 0.0, NULL);
                 }
                 else if (((cp - mark) == 5) && (strncmp(mark, "false", 5) == 0)) {
-                    parser_parse(p, P_BOOL, 0, NULL);
+                    parser_parse(p, P_BOOL, 0, 0.0, NULL);
                 }
                 else {
                     char *str = malloc(cp - mark + 1);
                     strncpy(str, mark, cp - mark);
                     str[cp - mark] = '\0';
-                    parser_parse(p, P_IDENT, 0, str);
-                    fprintf(stderr, 
-                        "Unexpected hash identifier '#%s' in tokenizer state: %i\n", 
+                    parser_parse(p, P_IDENT, 0, 0.0, str);
+                    fprintf(stderr,
+                        "Unexpected hash identifier '#%s' in tokenizer state: %i\n",
                         str, p->tokenizer_state);
                     free(str);
                     exit(1);
@@ -489,12 +540,15 @@ int parser_tokenize(struct parser *p, char *data) {
         }
         else if (p->tokenizer_state == S_PLUSMINUS) {
             if ((*cp >= '0') && (*cp <= '9')) {
-                p->tokenizer_state = S_NUMBER;
+                p->tokenizer_state = S_INTNUM;
             }
-            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL) 
-                || ((*cp >= 'a') && (*cp <= 'z')) 
-                || ((*cp >= '0') && (*cp <= '9')) 
-                || ((*cp >= 'A') && (*cp <= 'Z')) 
+            else if (*cp >= '.') {
+                p->tokenizer_state = S_FLONUM;
+            }
+            else if (   (strchr("!$%&*/:<=>?^_~", *cp) != NULL)
+                || ((*cp >= 'a') && (*cp <= 'z'))
+                || ((*cp >= '0') && (*cp <= '9'))
+                || ((*cp >= 'A') && (*cp <= 'Z'))
                 || (strchr("+-.@", *cp) != NULL) ) {
                 p->tokenizer_state = S_IDENT;
             }
@@ -506,7 +560,7 @@ int parser_tokenize(struct parser *p, char *data) {
                 char *str = malloc(cp - mark + 1);
                 strncpy(str, mark, cp - mark);
                 str[cp - mark] = '\0';
-                parser_parse(p, P_IDENT, 0, str);
+                parser_parse(p, P_IDENT, 0, 0.0, str);
                 free(str);
                 cp--;
                 mark = NULL;
@@ -547,11 +601,11 @@ void parser_free(struct parser *p) {
 int parser_consume(struct parser *p, char *data) {
     assert(p != NULL);
     assert(data != NULL);
-    
+
     return parser_tokenize(p, data);
 }
 
 void parser_eof(struct parser *p) {
-    parser_parse(p, P_EOF, 0, NULL);
+    parser_parse(p, P_EOF, 0, 0.0, NULL);
 }
 

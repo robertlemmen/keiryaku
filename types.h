@@ -145,14 +145,17 @@ typedef uint64_t value;
 #define psignbit(x)         ((uint64_t)((x) < 0 ? 1 : 0) << 63)
 #define gsignbit(x)         ((uint64_t)(((x) >> 63) == 0 ? 1 : -1))
 
-#define intval(x)           ((int64_t)(((x) & 0x7fffffffffffffff) >> 4) \
+#define intval(x)           (int64_t)((((x) & 0x7fffffffffffffff) >> 4) \
                                 * gsignbit(x))
 #define	make_int(a, x)      ((uint64_t)(labs(x) << 4) \
                                 | psignbit(x) | TYPE_INT)
 
-// XXX float are broken, need reinterpret_cast style casting
-#define floatval(x)         ((float)((x) >> 32))
-#define make_float(a, x)    (((uint64_t)(x) << 32) | TYPE_FLOAT)
+
+/* Float values, these are ony 32bit
+ * */
+#define value_is_float(x) (value_type(x) == TYPE_FLOAT)
+value make_float(struct allocator *a, float x);
+float floatval(value v);
 
 /* Cons cells
  *

@@ -6,6 +6,26 @@
 
 #include "heap.h"
 
+struct fvalu {
+    union {
+        uint64_t v;
+        float f;
+    };
+};
+
+value make_float(struct allocator *a, float x) {
+    struct fvalu fuv;
+    fuv.f = x;
+    return (fuv.v << 32) | TYPE_FLOAT;
+}
+
+float floatval(value v) {
+    assert(value_is_float(v));
+    struct fvalu fuv;
+    fuv.v = v >> 32;
+    return fuv.f;
+}
+
 value make_cons(struct allocator *a, value car, value cdr) {
     assert(sizeof(struct cons) == 16);
     struct cons *cp = allocator_alloc(a, sizeof(struct cons));
@@ -121,7 +141,7 @@ void dump_value(value v, FILE *f) {
             fprintf(f, "%li", intval(v));
             break;
         case TYPE_FLOAT:
-            fprintf(f, "%f", floatval(v));
+            fprintf(f, "%g", floatval(v));
             break;
         case TYPE_ENUM:
             switch (v) {

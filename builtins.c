@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #include "interp.h"
 #include "ports.h"
@@ -12,116 +13,246 @@ extern char **environ;
 
 value builtin_plus(struct allocator *alloc, value l) {
     int64_t ret = 0;
+    float fret = 0;
+    bool return_float = false;
     while (value_type(l) == TYPE_CONS) {
         value num = car(l);
-        assert(value_type(num) == TYPE_INT);
-        ret += (int64_t)intval(num);
-        l = cdr(l);    
+        if (value_type(num) == TYPE_INT) {
+            ret += intval(num);
+            fret += intval(num);
+        }
+        else if (value_type(num) == TYPE_FLOAT) {
+            fret += floatval(num);
+            return_float = true;
+        }
+        else {
+            assert(    (value_type(num) == TYPE_INT)
+                    || (value_type(num) == TYPE_FLOAT) );
+        }
+        l = cdr(l);
     }
 
-    return make_int(alloc, ret);
+    return return_float ? make_float(alloc, fret) : make_int(alloc, ret);
 }
 
 value builtin_minus(struct allocator *alloc, value l) {
     assert(value_type(l) == TYPE_CONS);
     int64_t ret = 0;
+    float fret = 0;
+    bool return_float = false;
     int count = 0;
     int first = 0;
+    float ffirst = 0;
     while (value_type(l) == TYPE_CONS) {
         value num = car(l);
-        assert(value_type(num) == TYPE_INT);
-        ret -= (int64_t)intval(num);
+        if (value_type(num) == TYPE_INT) {
+            ret -= intval(num);
+            fret -= intval(num);
+        }
+        else if (value_type(num) == TYPE_FLOAT) {
+            fret -= floatval(num);
+            return_float = true;
+        }
+        else {
+            assert(    (value_type(num) == TYPE_INT)
+                    || (value_type(num) == TYPE_FLOAT) );
+        }
         if (!count) {
             first = ret;
+            ffirst = fret;
         }
         l = cdr(l);
         count++;
     }
     if (count > 1) {
         ret -= first*2;
+        fret -= ffirst*2;
     }
-    return make_int(alloc, ret);
+
+    return return_float ? make_float(alloc, fret) : make_int(alloc, ret);
 }
 
 value builtin_mul(struct allocator *alloc, value l) {
     int64_t ret = 1;
+    float fret = 1.0;
+    bool return_float = false;
     while (value_type(l) == TYPE_CONS) {
         value num = car(l);
-        assert(value_type(num) == TYPE_INT);
-        ret *= (int64_t)intval(num);
-        l = cdr(l);    
+        if (value_type(num) == TYPE_INT) {
+            ret *= intval(num);
+            fret *= intval(num);
+        }
+        else if (value_type(num) == TYPE_FLOAT) {
+            fret *= floatval(num);
+            return_float = true;
+        }
+        else {
+            assert(    (value_type(num) == TYPE_INT)
+                    || (value_type(num) == TYPE_FLOAT) );
+        }
+        l = cdr(l);
     }
 
-    return make_int(alloc, ret);
+    return return_float ? make_float(alloc, fret) : make_int(alloc, ret);
 }
 
 value builtin_div(struct allocator *alloc, value l) {
     // XXX arity-one case doesn't work with this logic, but we don't have
     // rationals anyway...
     assert(value_type(l) == TYPE_CONS);
-    int64_t ret = intval(car(l));
-    l = cdr(l);    
+    int64_t ret;
+    float fret;
+    bool return_float = false;
+    value num = car(l);
+    if (value_type(num) == TYPE_INT) {
+        ret = intval(num);
+        fret = intval(num);
+    }
+    else if (value_type(num) == TYPE_FLOAT) {
+        fret = floatval(num);
+        return_float = true;
+    }
+    else {
+        assert(    (value_type(num) == TYPE_INT)
+                || (value_type(num) == TYPE_FLOAT) );
+    }
+    l = cdr(l);
     while (value_type(l) == TYPE_CONS) {
-        value num = car(l);
-        assert(value_type(num) == TYPE_INT);
-        ret /= (int64_t)intval(num);
-        l = cdr(l);    
+        num = car(l);
+        if (value_type(num) == TYPE_INT) {
+            ret /= intval(num);
+            fret /= intval(num);
+        }
+        else if (value_type(num) == TYPE_FLOAT) {
+            fret /= floatval(num);
+            return_float = true;
+        }
+        else {
+            assert(    (value_type(num) == TYPE_INT)
+                    || (value_type(num) == TYPE_FLOAT) );
+        }
+        l = cdr(l);
     }
 
-    return make_int(alloc, ret);
+    return return_float ? make_float(alloc, fret) : make_int(alloc, ret);
 }
 
 value builtin_numeric_equals(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
-
-    return (int64_t)intval(a) == (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    if ((value_type(a) == TYPE_INT) && (value_type(b) == TYPE_INT)) {
+        return intval(a) == intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else if ((value_type(a) == TYPE_FLOAT) || (value_type(b) == TYPE_FLOAT)) {
+        float fa = (value_type(a) == TYPE_FLOAT) ? floatval(a) : intval(a);
+        float fb = (value_type(b) == TYPE_FLOAT) ? floatval(b) : intval(b);
+        return fa == fb ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else {
+        assert(    (value_type(a) == TYPE_INT)
+                || (value_type(a) == TYPE_FLOAT) );
+        assert(    (value_type(b) == TYPE_INT)
+                || (value_type(b) == TYPE_FLOAT) );
+        return VALUE_FALSE;
+    }
 }
 
 value builtin_lt(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
-
-    return (int64_t)intval(a) < (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    if ((value_type(a) == TYPE_INT) && (value_type(b) == TYPE_INT)) {
+        return intval(a) < intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else if ((value_type(a) == TYPE_FLOAT) || (value_type(b) == TYPE_FLOAT)) {
+        float fa = (value_type(a) == TYPE_FLOAT) ? floatval(a) : intval(a);
+        float fb = (value_type(b) == TYPE_FLOAT) ? floatval(b) : intval(b);
+        return fa < fb ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else {
+        assert(    (value_type(a) == TYPE_INT)
+                || (value_type(a) == TYPE_FLOAT) );
+        assert(    (value_type(b) == TYPE_INT)
+                || (value_type(b) == TYPE_FLOAT) );
+        return VALUE_FALSE;
+    }
 }
 
 value builtin_gt(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
-
-    return (int64_t)intval(a) > (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    if ((value_type(a) == TYPE_INT) && (value_type(b) == TYPE_INT)) {
+        return intval(a) > intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else if ((value_type(a) == TYPE_FLOAT) || (value_type(b) == TYPE_FLOAT)) {
+        float fa = (value_type(a) == TYPE_FLOAT) ? floatval(a) : intval(a);
+        float fb = (value_type(b) == TYPE_FLOAT) ? floatval(b) : intval(b);
+        return fa > fb ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else {
+        assert(    (value_type(a) == TYPE_INT)
+                || (value_type(a) == TYPE_FLOAT) );
+        assert(    (value_type(b) == TYPE_INT)
+                || (value_type(b) == TYPE_FLOAT) );
+        return VALUE_FALSE;
+    }
 }
 
 value builtin_le(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
-
-    return (int64_t)intval(a) <= (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    if ((value_type(a) == TYPE_INT) && (value_type(b) == TYPE_INT)) {
+        return intval(a) <= intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else if ((value_type(a) == TYPE_FLOAT) || (value_type(b) == TYPE_FLOAT)) {
+        float fa = (value_type(a) == TYPE_FLOAT) ? floatval(a) : intval(a);
+        float fb = (value_type(b) == TYPE_FLOAT) ? floatval(b) : intval(b);
+        return fa <= fb ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else {
+        assert(    (value_type(a) == TYPE_INT)
+                || (value_type(a) == TYPE_FLOAT) );
+        assert(    (value_type(b) == TYPE_INT)
+                || (value_type(b) == TYPE_FLOAT) );
+        return VALUE_FALSE;
+    }
 }
 
 value builtin_ge(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
-
-    return (int64_t)intval(a) >= (int64_t)intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    if ((value_type(a) == TYPE_INT) && (value_type(b) == TYPE_INT)) {
+        return intval(a) >= intval(b) ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else if ((value_type(a) == TYPE_FLOAT) || (value_type(b) == TYPE_FLOAT)) {
+        float fa = (value_type(a) == TYPE_FLOAT) ? floatval(a) : intval(a);
+        float fb = (value_type(b) == TYPE_FLOAT) ? floatval(b) : intval(b);
+        return fa >= fb ? VALUE_TRUE : VALUE_FALSE;
+    }
+    else {
+        assert(    (value_type(a) == TYPE_INT)
+                || (value_type(a) == TYPE_FLOAT) );
+        assert(    (value_type(b) == TYPE_INT)
+                || (value_type(b) == TYPE_FLOAT) );
+        return VALUE_FALSE;
+    }
 }
 
 value builtin_expt(struct allocator *alloc, value a, value b) {
-    assert(value_type(a) == TYPE_INT);
-    assert(value_type(b) == TYPE_INT);
-
-    int64_t result = 1;
-    int64_t base = intval(a);
-    int64_t exp = intval(b);
-    while (exp) {
-        if (exp & 1) {
-            result *= base;
+    if ((value_type(a) == TYPE_INT) && (value_type(b) == TYPE_INT)) {
+        int64_t result = 1;
+        int64_t base = intval(a);
+        int64_t exp = intval(b);
+        while (exp) {
+            if (exp & 1) {
+                result *= base;
+            }
+            exp >>= 1;
+            base *= base;
         }
-        exp >>= 1;
-        base *= base;
+        return make_int(alloc, result);
     }
-
-    return make_int(alloc, result);
+    else if ((value_type(a) == TYPE_FLOAT) || (value_type(b) == TYPE_FLOAT)) {
+        float fa = (value_type(a) == TYPE_FLOAT) ? floatval(a) : intval(a);
+        float fb = (value_type(b) == TYPE_FLOAT) ? floatval(b) : intval(b);
+        return make_float(alloc, powf(fa, fb));
+    }
+    else {
+        assert(    (value_type(a) == TYPE_INT)
+                || (value_type(a) == TYPE_FLOAT) );
+        assert(    (value_type(b) == TYPE_INT)
+                || (value_type(b) == TYPE_FLOAT) );
+        return VALUE_FALSE;
+    }
 }
 
 value builtin_car(struct allocator *alloc, value v) {
@@ -199,13 +330,19 @@ value builtin_nil(struct allocator *alloc, value v) {
 }
 
 value builtin_number(struct allocator *alloc, value v) {
-    return (value_type(v) == TYPE_INT)
+    return ((value_type(v) == TYPE_INT) || (value_type(v) == TYPE_FLOAT))
         ? VALUE_TRUE
         : VALUE_FALSE;
 }
 
 value builtin_integer(struct allocator *alloc, value v) {
     return (value_type(v) == TYPE_INT)
+        ? VALUE_TRUE
+        : VALUE_FALSE;
+}
+
+value builtin_real(struct allocator *alloc, value v) {
+    return ((value_type(v) == TYPE_INT) || (value_type(v) == TYPE_FLOAT))
         ? VALUE_TRUE
         : VALUE_FALSE;
 }
@@ -464,6 +601,7 @@ void bind_builtins(struct allocator *alloc, struct interp_env *env) {
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_nil, "_nil?"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_number, "number?"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_integer, "integer?"));
+    bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_real, "real?"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_string, "string?"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_symbol, "symbol?"));
     bind_builtin_helper(alloc, env, make_builtin1(alloc, &builtin_string_length, "string-length"));
