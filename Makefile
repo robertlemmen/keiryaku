@@ -16,7 +16,7 @@ VERSION_STRING := $(if $(GIT_TAG),$(GIT_TAG),$(GIT_HASH))$(if $(GIT_DIRTY), (dir
 $(TARGET): $(OBJECTS) linenoise.o
 	@cat version.c.template | sed -e 's/\%VERSION_STRING\%/$(VERSION_STRING)/' > version.c
 	@echo "Linking $@..."
-	@$(CC) $(CFLAGS) $(LDFLAGS) -o $@ $^ version.c
+	@$(CC) $(CFLAGS) -o $@ $^ version.c $(LDFLAGS) 
 	@rm -f version.c
 
 %.o: %.c
