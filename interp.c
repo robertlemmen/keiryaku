@@ -9,13 +9,8 @@
 #include "global.h"
 #include "heap.h"
 
-// XXX could be more efficient structure rather than linked list, e.g. a list of
-// fixed-size arrays. also check the distribution of #entries over envs, could
-// be mostly very small with a few (like the top env) long-tail outliers. in
-// that case it would make sense to use a capacity buffer and increase in size
-// when it would overrun. that would also allow us to order the entries, so a
-// lookup would be O(log(n)) with a binary chop. most envs do have few (but
-// more than one) entries, the top a few hundred.
+#define MAX_INLINE_ENV_ENTRIES  3
+
 struct interp_env_entry {
     uint8_t sub_type;
     value name;
@@ -23,10 +18,17 @@ struct interp_env_entry {
     value next_entry_v;     // always a interp_env_entry
 };
 
+struct interp_env_entry_inline {
+    value name;
+    value value;
+};
+
 struct interp_env {
     uint8_t sub_type;
+    uint8_t num_inline_entries;
     value outer_v;          // always a interp_env
     value first_entry_v;    // always a interp_env_entry
+    struct interp_env_entry_inline inline_entries[];
 };
 
 struct interp {
@@ -46,8 +48,11 @@ struct interp_lambda {
 };
 
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
-    struct interp_env *ret = allocator_alloc(alloc, (sizeof(struct interp_env)));
+    struct interp_env *ret = allocator_alloc(alloc,
+              (sizeof(struct interp_env))
+            + sizeof(struct interp_env_entry_inline) * MAX_INLINE_ENV_ENTRIES);
     ret->sub_type = SUBTYPE_ENV;
+    ret->num_inline_entries = 0;
     if (outer) {
         ret->outer_v = make_environment(alloc, outer);
     }
@@ -62,16 +67,29 @@ value env_lookup(struct interp_env *env, value symbol, value *lookup_vector) {
     assert(value_is_symbol(symbol));
     int envs = 0;
     while (env) {
-        value ee_v = env->first_entry_v;
         int entries = 0;    // XXX rename, also in vector lookup, so that it is clear that this  is the number of entries, not the field in the struct
+
+        // lookup in the inlines
+        for (int i = 0; i < env->num_inline_entries; i++) {
+            struct interp_env_entry_inline *ee = &env->inline_entries[i];
+            if (       (ee->name == symbol) // short symbol case
+                    || (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0)) {
+                if (lookup_vector) {
+                    *lookup_vector = make_lookup_vector(NULL, envs, entries);
+                }
+                return ee->value;
+            }
+            entries++;
+        }
+
+        // lookup in the overflow list
+        value ee_v = env->first_entry_v;
         while (ee_v != VALUE_NIL) {
             struct interp_env_entry *ee = value_to_env_entry(ee_v);
             assert(value_is_symbol(ee->name));
             if (       (ee->name == symbol) // short symbol case
                     || (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0)) {
                 if (lookup_vector) {
-                    // XXX it's somewhat ugly that this relies on alloc not
-                    // being required...
                     *lookup_vector = make_lookup_vector(NULL, envs, entries);
                 }
                 return ee->value;
@@ -98,6 +116,16 @@ value env_lookup_vector(struct interp_env *env, value vector) {
         envs--;
         env = value_to_environment(env->outer_v);
     }
+
+    // is it one of the inlines?
+    if (entries < env->num_inline_entries) {
+        return env->inline_entries[entries].value;
+    }
+    else {
+        entries -= env->num_inline_entries;
+    }
+
+    // go through the overflow list then
     value ee_v = env->first_entry_v;
     while (entries) {
         entries--;
@@ -109,12 +137,25 @@ value env_lookup_vector(struct interp_env *env, value vector) {
 void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, value val) {
     assert(value_is_symbol(symbol));
     struct interp_env_entry *prev = NULL;
-    value ee_v = env->first_entry_v;
 
+    // check for same name in lines
+    for (int i = 0; i < env->num_inline_entries; i++) {
+        struct interp_env_entry_inline *ee = &env->inline_entries[i];
+        if (       (ee->name == symbol) // short symbol case
+                || (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0)) {
+            ee->value = val;
+            write_barrier(alloc, make_environment(alloc, env), &env->first_entry_v);
+            return;
+        }
+    }
+
+    // check for same name in overflow list
+    value ee_v = env->first_entry_v;
     while (ee_v != VALUE_NIL) {
         struct interp_env_entry *ee = value_to_env_entry(ee_v);
         assert(value_is_symbol(ee->name));
-        if (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0) {
+        if (       (ee->name == symbol) // short symbol case
+                || (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0)) {
             ee->value = val;
             write_barrier(alloc, ee_v, &ee->value);
             return;
@@ -122,6 +163,17 @@ void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, val
         prev = ee;
         ee_v = ee->next_entry_v;
     }
+
+    // add to inlines?
+    if (env->num_inline_entries < MAX_INLINE_ENV_ENTRIES) {
+        env->inline_entries[env->num_inline_entries].name = symbol;
+        env->inline_entries[env->num_inline_entries].value = val;
+        env->num_inline_entries++;
+        write_barrier(alloc, make_environment(alloc, env), &env->first_entry_v);
+        return;
+    }
+
+    // add to overflow_list
     struct interp_env_entry *nee = allocator_alloc(alloc, (sizeof(struct interp_env_entry)));
     nee->sub_type = SUBTYPE_ENV_ENTRY;
     nee->next_entry_v = VALUE_NIL;
@@ -143,6 +195,18 @@ bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, valu
     assert(value_is_symbol(symbol));
 
     while (env) {
+        // set in the inline array
+        for (int i = 0; i < env->num_inline_entries; i++) {
+            struct interp_env_entry_inline *ee = &env->inline_entries[i];
+            if (       (ee->name == symbol) // short symbol case
+                    || (strcmp(value_to_symbol(&ee->name), value_to_symbol(&symbol)) == 0)) {
+                ee->value = val;
+                write_barrier(alloc, make_environment(alloc, env), &env->first_entry_v);
+                return true;
+            }
+        }
+
+        // set in the overflow list
         value ee_v = env->first_entry_v;
         while (ee_v != VALUE_NIL) {
             struct interp_env_entry *ee = value_to_env_entry(ee_v);
@@ -260,6 +324,8 @@ int interp_count_nonlist(value expr, bool *well_formed) {
     return ret;
 }
 
+// XXX move all of this to the top of the file
+//
 // XXX currently we are limited to that many arguments for most calls, which is
 // silly. but the call frame should be of limited size. so we need some sort of
 // overflow mechanism. or we always use a list...
@@ -820,6 +886,10 @@ void interp_traverse_env_entry(struct allocator_gc_ctx *gc, struct interp_env_en
 void interp_traverse_env(struct allocator_gc_ctx *gc, struct interp_env *env) {
     allocator_gc_add_root_fp(gc, &env->first_entry_v);
     allocator_gc_add_root_fp(gc, &env->outer_v);
+    for (int i = 0; i < env->num_inline_entries; i++) {
+        allocator_gc_add_root_fp(gc, &env->inline_entries[i].name);
+        allocator_gc_add_root_fp(gc, &env->inline_entries[i].value);
+    }
 }
 
 void interp_gc(struct interp *i) {

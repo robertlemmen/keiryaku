@@ -37,6 +37,5 @@ memory management
 
 performance
 -----------
-+ interp_env_entry should not be linked list
 - lookup vectors could be weak references
 - more symbols could be replaced with vectors (?)
