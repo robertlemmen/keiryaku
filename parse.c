@@ -415,7 +415,6 @@ int parser_tokenize(struct parser *p, char *data) {
                 // it was just a dot after all
                 p->tokenizer_state = S_INIT;
                 char *ep = cp-1;
-                float num_literal = strtof(mark, &ep);
                 parser_parse(p, P_DOT, 0, 0.0, NULL);
                 cp--;
                 mark = NULL;

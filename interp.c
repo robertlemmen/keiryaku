@@ -9,6 +9,11 @@
 #include "global.h"
 #include "heap.h"
 
+// XXX currently we are limited to that many arguments for most calls, which is
+// silly. but the call frame should be of limited size. so we need some sort of
+// overflow mechanism. or we always use a list...
+#define NUM_LOCALS  8
+
 #define MAX_INLINE_ENV_ENTRIES  3
 
 struct interp_env_entry {
@@ -45,6 +50,21 @@ struct interp_lambda {
     value env_v;            // always a interp_env
     value arg_names[];      // inline array, struct needs to be allocated with 
                             // correct size 
+};
+
+struct call_frame {
+    value expr;                     // expr to be evaluated in this frame
+    value env_v;                    // the env in which to evaluate the expression
+    value extra_env_v;              // scratch env used during eval
+    value locals[NUM_LOCALS];       // scratch space required to evaluate
+    struct call_frame *outer;       // caller
+};
+
+struct dynamic_frame {
+    uint8_t sub_type;
+    value param;
+    value val;
+    value outer_v;  // always a dynamic_frame
 };
 
 struct interp_env* env_new(struct allocator *alloc, struct interp_env *outer) {
@@ -189,8 +209,6 @@ void env_bind(struct allocator *alloc, struct interp_env *env, value symbol, val
     }
 }
 
-// XXX doesn't this need a short symbol case?
-// actually it's the other way around, this is correct the other one is daft
 bool env_set(struct allocator *alloc, struct interp_env *env, value symbol, value val) {
     assert(value_is_symbol(symbol));
 
@@ -323,28 +341,6 @@ int interp_count_nonlist(value expr, bool *well_formed) {
     }
     return ret;
 }
-
-// XXX move all of this to the top of the file
-//
-// XXX currently we are limited to that many arguments for most calls, which is
-// silly. but the call frame should be of limited size. so we need some sort of
-// overflow mechanism. or we always use a list...
-#define NUM_LOCALS  8
-
-struct call_frame {
-    value expr;                     // expr to be evaluated in this frame
-    value env_v;                    // the env in which to evaluate the expression
-    value extra_env_v;              // scratch env used during eval
-    value locals[NUM_LOCALS];       // scratch space required to evaluate
-    struct call_frame *outer;       // caller
-};
-
-struct dynamic_frame {
-    uint8_t sub_type;
-    value param;
-    value val;
-    value outer_v;  // always a dynamic_frame
-};
 
 inline __attribute__((always_inline))
 struct call_frame* call_frame_new(struct allocator *alloc, struct call_frame *outer,
