@@ -75,6 +75,8 @@
 (procedure? car)
 (procedure? (lambda (x) (+ x x)))
 (procedure? 'car)
+(define test (lambda () 23))
+(test)
 ===
 9
 720
@@ -107,3 +109,4 @@
 #t
 #t
 #f
+23

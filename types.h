@@ -23,7 +23,7 @@
  *   010_ - float
  *   011_ - short symbol
  *   100_ - short string
- *   101_ - lookup vector`
+ *   101_ - lookup vector
  *
  * in the case of floats and integers, the top 32 bits contain the value, in the 
  * case of an enumerated value, the next bits are used to specify the exact value:
@@ -61,7 +61,7 @@
  *   011_ - builtin (stuff callable from scheme but written in C, with arity)
  *   100_ - interpreter lambda
  *   101_ - vector
- *   110_ - port
+ *   110_ - 
  *   111_ - boxed / other
  *
  * in the case of "boxed" non-immediates, the sub-type is stored on the heap as

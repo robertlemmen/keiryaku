@@ -14,7 +14,9 @@ core features
 
 technicalities
 --------------
-+ implement argument overflow logic in interp.c eval frame
++ implement argument overflow logic in interp.c eval frame. the call frame could
+  just have a pointer entry that is dynamically allocated in these cases. 
+- is extra_env_v really required, or could we just use a local?
 - equals? needs implementation for vectors
 - equals? should support cyclic structures, also dump_values and list?
 - refactor type tagging, use all lower bits to signal immediate, to yield
@@ -23,10 +25,6 @@ technicalities
 - the inlining around interp_eval_env does not seem to work, still shows up in
   call graphs
 - double-check that simple tail recursions can actually be done in bound memory
-
-bugs
-----
-+ lambdas without args do not work, compilerbug? (define test (lambda () 23))
 
 memory management
 -----------------
@@ -37,5 +35,6 @@ memory management
 
 performance
 -----------
-- lookup vectors could be weak references
+- lookup vectors could be weak references. top bits need to be used to define
+  which value within the heap object/offset
 - more symbols could be replaced with vectors (?)

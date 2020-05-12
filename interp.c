@@ -470,7 +470,7 @@ tailcall_label:
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (value_type(car(args)) != TYPE_CONS) {
+                        if ((value_type(car(args)) != TYPE_CONS) && (car(args) != VALUE_EMPTY_LIST)) {
                             lambda = allocator_alloc(i->alloc, sizeof(struct interp_lambda) + sizeof(value) * 1);
                             lambda->variadic = 1;
                             lambda->arity = 1;
