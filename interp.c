@@ -570,34 +570,49 @@ tailcall_label:
                         arg_count = 0;
                         // we use f->locals[NUM_LOCALS-1] as a temporary
                         f->locals[NUM_LOCALS-1] = args;
-                        while (value_type(f->locals[NUM_LOCALS-1]) == TYPE_CONS) {
-                            // XXX check overflows, take temporary into acocunt
-                            f->locals[arg_count] = interp_eval_env(i, f, dyn_frame, car(f->locals[NUM_LOCALS-1]), value_to_environment(f->env_v), VALUE_NIL);
-                            f->locals[NUM_LOCALS-1] = cdr(f->locals[NUM_LOCALS-1]);
+                        f->locals[1] = VALUE_EMPTY_LIST;
+                        f->locals[2] = VALUE_NIL;
+                        f->locals[3] = VALUE_NIL;
+                        f->locals[4] = args;
+                        while (value_type(f->locals[4]) == TYPE_CONS) {
+                            value temp = make_cons(i->alloc,
+                                                interp_eval_env(i, f, dyn_frame, car(f->locals[4]), value_to_environment(f->env_v), VALUE_NIL),
+                                                VALUE_EMPTY_LIST);
+                            if (f->locals[1] == VALUE_EMPTY_LIST) {
+                                f->locals[1] = temp;
+                            }
+                            else {
+                                set_cdr(i->alloc, f->locals[2], temp);
+                            }
+                            f->locals[3] = f->locals[2];
+                            f->locals[2] = temp;
+                            f->locals[4] = cdr(f->locals[4]);
                             arg_count++;
                         }
+
                         if (arg_count < 2) {
                             fprintf(stderr, "Arity error in application of special 'apply': expected 2 or more args but got %i\n",
                                 arg_count);
                             return VALUE_NIL;
                         }
-                        if (   (value_type(f->locals[arg_count-1]) != TYPE_CONS)
-                            && (f->locals[arg_count-1] != VALUE_EMPTY_LIST) ) {
+                        f->locals[4] = car(f->locals[2]);
+                        if (   (value_type(f->locals[4]) != TYPE_CONS)
+                            && (f->locals[4] != VALUE_EMPTY_LIST) ) {
                             fprintf(stderr, "Error in application of special 'apply': last argument is not a list\n");
                             return VALUE_NIL;
                         }
-                        f->locals[NUM_LOCALS-1] = f->locals[arg_count-1];
-                        arg_count--;
-                        while (value_type(f->locals[NUM_LOCALS-1]) == TYPE_CONS) {
-                            // XXX check overflows
-                            f->locals[arg_count] = car(f->locals[NUM_LOCALS-1]);
-                            f->locals[NUM_LOCALS-1] = cdr(f->locals[NUM_LOCALS-1]);
+                        // splice the last entry of the arg list onto the arg
+                        // list itself (1 2 3 (4 5) -> (1 2 3 4 5)
+                        set_cdr(i->alloc, f->locals[3], f->locals[4]);
+                        while (value_type(f->locals[4]) == TYPE_CONS) {
+                            f->locals[4] = cdr(f->locals[4]);
                             arg_count++;
                         }
-                        // so far we have treated the first arg as an arg, but
-                        // in eval it is the op
-                        arg_count--;
+                        // extract the operator
+                        f->locals[0] = car(f->locals[1]);
                         op = f->locals[0];
+                        f->locals[1] = cdr(f->locals[1]);
+                        arg_count -= 2;
                         // XXX check that the operator is not a special
                         // arg_count and f->locals is set up correctly, just
                         // jump to the eval logic after its own evaluation of
@@ -697,53 +712,49 @@ tailcall_label:
                 }
             }
             else {
-                // XXX do we need to set this again?
-                // XXX we could have one block for both builtins and lambdas, where
-                // at the very start we would evaluate all arguments. this way we
-                // could goto from the apply special after it has set up the
-                // arguments, avoiding code duplication
-                arg_count = interp_collect_list(cdr(f->expr), NUM_LOCALS-1, &f->locals[1]);
-                if (arg_count == NUM_LOCALS-1) {
-                    // XXX implement overflow logic
-                    fprintf(stderr, "Currently only %d args are supported\n",  NUM_LOCALS - 2);
-                    return VALUE_NIL;
-                }
-                // evaluate all arguments
-                for (int j = 0; j < arg_count; j++) {
-                    f->locals[j+1] = interp_eval_env(i, f, dyn_frame, f->locals[j+1], value_to_environment(f->env_v), VALUE_NIL);
+                value raw_arg_list = cdr(f->expr);
+ 
+                arg_count = 0;
+                f->locals[3] = raw_arg_list;
+                f->locals[1] = VALUE_EMPTY_LIST;
+                f->locals[2] = VALUE_NIL;
+                while (value_type(f->locals[3]) == TYPE_CONS) {
+                    value temp = make_cons(i->alloc,
+                                        interp_eval_env(i, f, dyn_frame, car(f->locals[3]), value_to_environment(f->env_v), VALUE_NIL),
+                                        VALUE_EMPTY_LIST);
+                    if (f->locals[1] == VALUE_EMPTY_LIST) {
+                        f->locals[1] = temp;
+                    }
+                    else {
+                        set_cdr(i->alloc, f->locals[2], temp);
+                    }
+                    f->locals[2] = temp;
+                    f->locals[3] = cdr(f->locals[3]);
+                    arg_count++;
                 }
                 // all the interp_eval_env could have cause GC, which would have
                 // wrecked our "op", so we need to reset it from the
                 // f->locals[0] that are safe. perhaps we should just use
                 // f->locals in general
                 op = f->locals[0];
+// XXX apply laboriously turns the list of arguments into a flat array in
+// locals, with overflows and all. and then the thing called is typically
+// variadic and does the reverse. what a waste...
 apply_eval_label:
                 if (value_type(op) == TYPE_BUILTIN) {
                     if (builtin_arity(op) == BUILTIN_ARITY_VARIADIC) {
-                        value arg_list = VALUE_EMPTY_LIST;
-                        value current_arg = VALUE_NIL;
-                        for (int j = 0; j < arg_count; j++) {
-                            value temp = make_cons(i->alloc,
-                                                f->locals[j+1],
-                                                VALUE_EMPTY_LIST);
-                            if (arg_list == VALUE_EMPTY_LIST) {
-                                arg_list = temp;
-                            }
-                            else {
-                                set_cdr(i->alloc, current_arg, temp);
-                            }
-                            current_arg = temp;
-                        }
                         t_builtinv funcptr = builtinv_ptr(op);
-                        return funcptr(i->alloc, arg_list);
+                        return funcptr(i->alloc, f->locals[1]);
                     }
                     else {
                         int op_arity = builtin_arity(op);
                         if (op_arity != arg_count) {
                             fprintf(stderr, "Arity error in application of builtin '%s': expected %d args but got %d\n",
                                 builtin_name(op), op_arity, arg_count);
+                            dump_value(f->locals[1], stderr); fprintf(stderr, "\n");
                             return VALUE_NIL;
                         }
+                        interp_collect_list(f->locals[1], arg_count, &f->locals[1]);
                         switch (op_arity) {
                             case 0:;
                                 t_builtin0 funcptr0 = builtin0_ptr(op);
@@ -775,30 +786,19 @@ apply_eval_label:
                     struct interp_lambda *lambda = value_to_interp_lambda(op);
                     f->extra_env_v = make_environment(i->alloc, env_new(i->alloc, value_to_environment(lambda->env_v)));
                     if (lambda->variadic) {
-                        int ax;
                         if (arg_count < lambda->arity - 1) {
                             fprintf(stderr, "Arity error in application of variadic lambda: expected a minimum of %i args but got %i\n",
                                 lambda->arity, arg_count);
                             return VALUE_NIL;
                         }
-                        for (ax = 0; ax < lambda->arity - 1; ax++) {
-                            env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[ax], f->locals[ax+1]);
+                        int idx = 0;
+                        value ca = f->locals[1];
+                        while ((value_type(ca) == TYPE_CONS) && (idx < lambda->arity - 1)) {
+                            env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[idx], car(ca));
+                            idx++;
+                            ca =  cdr(ca);
                         }
-                        value arg_list = VALUE_EMPTY_LIST;
-                        value current_arg = VALUE_NIL;
-                        for (int j = ax; j < arg_count; j++) {
-                            value temp = make_cons(i->alloc,
-                                                f->locals[j+1],
-                                                VALUE_EMPTY_LIST);
-                            if (arg_list == VALUE_EMPTY_LIST) {
-                                arg_list = temp;
-                            }
-                            else {
-                                set_cdr(i->alloc, current_arg, temp);
-                            }
-                            current_arg = temp;
-                        }
-                        env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[ax], arg_list);
+                        env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[idx], ca);
                     }
                     else {
                         if (lambda->arity != arg_count) {
@@ -806,8 +806,12 @@ apply_eval_label:
                                 lambda->arity, arg_count);
                             return VALUE_NIL;
                         }
-                        for (int idx = 0; idx < arg_count; idx++) {
-                            env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[idx], f->locals[idx+1]);
+                        int idx = 0;
+                        value ca = f->locals[1];
+                        while (value_type(ca) == TYPE_CONS) {
+                            env_bind(i->alloc, value_to_environment(f->extra_env_v), lambda->arg_names[idx], car(ca));
+                            idx++;
+                            ca =  cdr(ca);
                         }
                     }
                     f->expr = lambda->body;

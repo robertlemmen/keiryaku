@@ -41,17 +41,5 @@
 ; 906609 is correct
 (outerf (iota 999 999 -1) (iota 999 999 -1) 0)
 
-
-
-; XXX like this I can get the *parser* to segfault !!!
-; (define (outerf seqa seqb lim)
-;   (if (null? seqa)
-;     0
-;     (let* ([ra (innerf (car seqa) seqb lim)]
-;            [rb (outerf (cdr seqa) seqb lim)])
-;       (max ra rb))))
-;     
-; (outerf (iota 99 99 -1) (iota 99 99 -1) 0)
-;
 ===
 906609

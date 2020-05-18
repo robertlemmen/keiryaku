@@ -14,8 +14,6 @@ core features
 
 technicalities
 --------------
-+ implement argument overflow logic in interp.c eval frame. the call frame could
-  just have a pointer entry that is dynamically allocated in these cases. 
 - is extra_env_v really required, or could we just use a local?
 - equals? needs implementation for vectors
 - equals? should support cyclic structures, also dump_values and list?

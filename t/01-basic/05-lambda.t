@@ -77,6 +77,16 @@
 (procedure? 'car)
 (define test (lambda () 23))
 (test)
+(apply + '())
+(apply + 1 '())
+(apply + 1 2 '())
+(apply + 1 '(2))
+(apply + '(1 2))
+(apply + 1 2 3 4 5 6 7 8 '(1 2 3 4 5 6 7 8))
+(define manyargs 
+    (lambda (a1 a2 a3 a4 a5 a6 a7 a8 a9)
+        (+ a1 a2 a3 a4 a5 a6 a7 a8 a9)))
+(manyargs 1 2 3 4 5 6 7 8 9)
 ===
 9
 720
@@ -110,3 +120,10 @@
 #t
 #f
 23
+0
+1
+3
+3
+3
+72
+45
